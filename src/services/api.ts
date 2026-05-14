@@ -1,8 +1,25 @@
 import axios from 'axios'
+import { useStore } from '@/store/useStore'
 
+// ==============================================
+// 这里就是你要的【动态前缀】，想改随时改这一行！
+// ==============================================
+const API_PREFIX = ''; // 为空 → /api
+// const API_PREFIX = '/opencraft_app'; // 开启 → /opencraft_app/api
+
+// 创建 axios 实例
 const api = axios.create({
-  baseURL: '/api',
+  // 关键：自动拼接前缀 + /api
+  baseURL: `${API_PREFIX}/api`,
   headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use((config) => {
+  const store = useStore.getState()
+  if (store.currentAccount) {
+    config.headers['token'] = store.currentAccount
+  }
+  return config
 })
 
 export default api

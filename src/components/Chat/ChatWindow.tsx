@@ -4,6 +4,13 @@ import { microAppApi, dataApi } from '@/services/api'
 import FlowChart from '@/components/Common/FlowChart'
 import BrowserSimulator from '@/components/Common/BrowserSimulator'
 import type { ChatMessage } from '@/types'
+import { Select,Tooltip,Modal } from 'antd'
+const { Option } = Select;
+const accountOptions = [
+  { key: 'P00001100', label: 'P00001100' },
+  { key: 'soaadmin', label: 'soaadmin' },
+  { key: 'P00001108', label: 'P00001108' },
+]
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -247,6 +254,9 @@ export default function ChatWindow() {
     browserUrl,
   } = store
 
+  const currentAccount = useStore((state) => state.currentAccount)
+  const setCurrentAccount = useStore((state) => state.setCurrentAccount)
+
   const messageScrollRef = useRef<HTMLDivElement>(null)
   const outerScrollRef = useRef<HTMLDivElement>(null)
   const userScrolledUp = useRef(false)
@@ -424,20 +434,30 @@ export default function ChatWindow() {
   }
 
   const clearMessages = async () => {
-    if (!confirm('确定要清空当前对话记录吗？')) return
-    store.setMessages([])
-    store.setDedicatedMessages([])
-    try {
-      localStorage.removeItem('dtv_messages')
-    } catch {
-      // ignore
-    }
-    try {
-      await fetch('/api/chat/history', { method: 'DELETE' })
-    } catch {
-      // ignore
-    }
-  }
+  Modal.confirm({
+    title: '清空对话记录',
+    content: '确定要清空当前对话记录吗？',
+    okText: '确定',
+    cancelText: '取消',
+    onOk: async () => {
+      store.setMessages([]);
+      store.setDedicatedMessages([]);
+      try {
+        localStorage.removeItem('dtv_messages');
+      } catch {
+        // ignore
+      }
+      try {
+        await fetch('/api/chat/history', { method: 'DELETE' });
+      } catch {
+        // ignore
+      }
+    },
+    onCancel: () => {
+      // 取消，不做任何操作
+    },
+  });
+};
 
   const loadExecutionHistory = async (appId: string) => {
     try {
@@ -638,171 +658,180 @@ export default function ChatWindow() {
   }
 
   const sendMessage = () => {
-    const text = inputText.trim()
-    if (!text || isThinking) return
+  const text = inputText.trim()
+  if (!text || isThinking) return
 
-    // Close any existing inline browser before sending a new message
-    // (it will reopen if the backend returns a browserUrl in the response)
-    store.setShowBrowserSimulator(false)
+  // 关闭浏览器模拟器
+  store.setShowBrowserSimulator(false)
 
-    store.setInputText('')
-    const isBuild = store.chatMode === 'build'
-    const target = isBuild
-      ? store.buildMessages
-      : selectedMicroApp
-      ? store.dedicatedMessages
-      : store.messages
-    const setTarget = isBuild
-      ? store.setBuildMessages
-      : selectedMicroApp
-      ? store.setDedicatedMessages
-      : store.setMessages
-    const newMsg: ChatMessage = {
-      id: 'msg-' + Date.now(),
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    }
-    setTarget([...target, newMsg])
-    scrollToBottom('smooth', 50)
-    store.setIsThinking(true)
+  store.setInputText('')
+  const isBuild = store.chatMode === 'build'
+  const target = isBuild
+    ? store.buildMessages
+    : selectedMicroApp
+    ? store.dedicatedMessages
+    : store.messages
+  const setTarget = isBuild
+    ? store.setBuildMessages
+    : selectedMicroApp
+    ? store.setDedicatedMessages
+    : store.setMessages
+  
+  // 添加用户消息
+  const newMsg: ChatMessage = {
+    id: 'msg-' + Date.now(),
+    role: 'user',
+    content: text,
+    timestamp: new Date().toISOString(),
+  }
+  setTarget([...target, newMsg])
+  scrollToBottom('smooth', 50)
+  store.setIsThinking(true)
 
-    const appId = selectedMicroApp ? selectedMicroApp.id : ''
-    const chatMode = store.chatMode
-    let url = '/api/chat/stream?message=' + encodeURIComponent(text)
-    if (appId) {
-      url += '&appId=' + encodeURIComponent(appId)
-    }
-    url += '&mode=' + encodeURIComponent(chatMode)
-    if (chatMode === 'build' && appCreatorDraft) {
-      url += '&draftApp=' + encodeURIComponent(JSON.stringify(appCreatorDraft))
-    } else if (pendingCreation) {
-      url += '&draftApp=' + encodeURIComponent(JSON.stringify(pendingCreation))
-    }
+  const appId = selectedMicroApp ? selectedMicroApp.id : ''
+  const chatMode = store.chatMode
+  const account = currentAccount
+  
+  // 拼接请求地址
+  let url = '/api/chat/stream?message=' + encodeURIComponent(text)
+  if (appId) url += '&appId=' + encodeURIComponent(appId)
+  url += '&mode=' + encodeURIComponent(chatMode)
+  url += '&token=' + encodeURIComponent(account)
+  
+  if (chatMode === 'build' && appCreatorDraft) {
+    url += '&draftApp=' + encodeURIComponent(JSON.stringify(appCreatorDraft))
+  } else if (pendingCreation) {
+    url += '&draftApp=' + encodeURIComponent(JSON.stringify(pendingCreation))
+  }
 
-    const eventSource = new EventSource(url)
-    let assistantContent = ''
-    let assistantMsgId: string | null = null
-    let sseTimeout: ReturnType<typeof setTimeout> | null = null
+  // ====================== 核心修复：定义 eventSource ======================
+  let assistantContent = ''
+  let assistantMsgId: string | null = null
+  let sseTimeout: ReturnType<typeof setTimeout> | null = null
 
-    const getCurrentMessages = () =>
-      isBuild ? useStore.getState().buildMessages : selectedMicroApp ? useStore.getState().dedicatedMessages : useStore.getState().messages
+  // 创建 EventSource 实例（修复未定义问题）
+  const eventSource = new EventSource(url, {
+    withCredentials: false
+  })
 
-    const cleanupSse = () => {
-      if (sseTimeout) clearTimeout(sseTimeout)
-      eventSource.close()
-      store.setIsThinking(false)
-    }
+  const getCurrentMessages = () =>
+    isBuild ? useStore.getState().buildMessages : selectedMicroApp ? useStore.getState().dedicatedMessages : useStore.getState().messages
 
-    // Overall safety timeout (120s). Normal chat tokens arrive continuously and reset it.
-    const resetTimeout = () => {
-      if (sseTimeout) clearTimeout(sseTimeout)
-      sseTimeout = setTimeout(() => {
-        cleanupSse()
-        if (!assistantContent) {
-          const errMsg: ChatMessage = {
-            id: 'msg-' + Date.now(),
-            role: 'assistant',
-            content: '请求超时，请稍后重试。',
-            timestamp: new Date().toISOString(),
-          }
-          setTarget([...getCurrentMessages(), errMsg])
-          scrollToBottom('smooth', 50)
-        }
-      }, 120000)
-    }
+  // 清理函数
+  const cleanupSse = () => {
+    if (sseTimeout) clearTimeout(sseTimeout)
+    eventSource.close()
+    store.setIsThinking(false)
+  }
 
-    resetTimeout()
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        resetTimeout()
-
-        if (data.type === 'delta') {
-          assistantContent += data.content
-          if (!assistantMsgId) {
-            assistantMsgId = 'msg-' + Date.now()
-            const msg: ChatMessage = {
-              id: assistantMsgId,
-              role: 'assistant',
-              content: assistantContent,
-              timestamp: new Date().toISOString(),
-              _streaming: true,
-            }
-            setTarget([...getCurrentMessages(), msg])
-          } else {
-            const msgs = getCurrentMessages()
-            const msg = msgs.find((m) => m.id === assistantMsgId)
-            if (msg) {
-              const updated = msgs.map((m) => (m.id === assistantMsgId ? { ...m, content: assistantContent } : m))
-              setTarget(updated)
-            }
-          }
-          scrollToBottom('auto')
-        } else if (data.type === 'done') {
-          const msgs = getCurrentMessages()
-          const msg = msgs.find((m) => m.id === assistantMsgId)
-          const cleanContent = stripDraftUpdateMarker(stripConfirmMarker(stripAskConfirmMarker(data.content)))
-          if (msg) {
-            const updated = msgs.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: cleanContent, _streaming: false } : m
-            )
-            setTarget(updated)
-          }
-          const draft = parseConfirmMarker(data.content)
-          if (draft) {
-            store.setPendingCreation(draft)
-          } else {
-            store.setPendingCreation(null)
-          }
-          const askDraft = parseAskConfirmMarker(data.content)
-          if (askDraft) {
-            store.setAskedCreation(askDraft)
-          } else {
-            store.setAskedCreation(null)
-          }
-          // Auto-apply draft updates in build mode so the form stays in sync with the assistant
-          if (chatMode === 'build') {
-            const draftUpdate = parseDraftUpdateMarker(data.content)
-            if (draftUpdate && store.appCreatorDraft) {
-              const next = { ...store.appCreatorDraft, ...draftUpdate }
-              if (draftUpdate.interfaces && Array.isArray(draftUpdate.interfaces)) {
-                const steps = (draftUpdate.interfaces as string[]).map((id: string) => {
-                  const a = apis.find((x) => x.id === id)
-                  return { type: 'api', apiId: id, label: a?.name || id }
-                })
-                next.flow = { type: 'sequence', steps }
-              }
-              store.setAppCreatorDraft(next)
-            }
-          }
-          if (data.browserUrl) {
-            store.setBrowserUrl(data.browserUrl)
-            store.setShowBrowserSimulator(true)
-          }
-          cleanupSse()
-          scrollToBottom('smooth', 100)
-        }
-      } catch {
-        // ignore malformed events
-      }
-    }
-
-    eventSource.onerror = () => {
+  // 超时机制
+  const resetTimeout = () => {
+    if (sseTimeout) clearTimeout(sseTimeout)
+    sseTimeout = setTimeout(() => {
       cleanupSse()
       if (!assistantContent) {
         const errMsg: ChatMessage = {
           id: 'msg-' + Date.now(),
           role: 'assistant',
-          content: '连接出错，请稍后重试。',
+          content: '请求超时，请稍后重试。',
           timestamp: new Date().toISOString(),
         }
         setTarget([...getCurrentMessages(), errMsg])
+        scrollToBottom('smooth', 50)
       }
-      scrollToBottom('smooth', 50)
+    }, 120000)
+  }
+
+  resetTimeout()
+
+  // 接收消息
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      resetTimeout()
+
+      if (data.type === 'delta') {
+        assistantContent += data.content
+        if (!assistantMsgId) {
+          assistantMsgId = 'msg-' + Date.now()
+          const msg: ChatMessage = {
+            id: assistantMsgId,
+            role: 'assistant',
+            content: assistantContent,
+            timestamp: new Date().toISOString(),
+            _streaming: true,
+          }
+          setTarget([...getCurrentMessages(), msg])
+        } else {
+          const msgs = getCurrentMessages()
+          const msg = msgs.find((m) => m.id === assistantMsgId)
+          if (msg) {
+            const updated = msgs.map((m) => (m.id === assistantMsgId ? { ...m, content: assistantContent } : m))
+            setTarget(updated)
+          }
+        }
+        scrollToBottom('auto')
+      } else if (data.type === 'done') {
+        const msgs = getCurrentMessages()
+        const msg = msgs.find((m) => m.id === assistantMsgId)
+        const cleanContent = stripDraftUpdateMarker(stripConfirmMarker(stripAskConfirmMarker(data.content)))
+        if (msg) {
+          const updated = msgs.map((m) =>
+            m.id === assistantMsgId ? { ...m, content: cleanContent, _streaming: false } : m
+          )
+          setTarget(updated)
+        }
+        // 处理创建应用逻辑
+        const draft = parseConfirmMarker(data.content)
+        store.setPendingCreation(draft ?? null)
+        const askDraft = parseAskConfirmMarker(data.content)
+        store.setAskedCreation(askDraft ?? null)
+        
+        // 构建模式自动更新草稿
+        if (chatMode === 'build') {
+          const draftUpdate = parseDraftUpdateMarker(data.content)
+          if (draftUpdate && store.appCreatorDraft) {
+            const next = { ...store.appCreatorDraft, ...draftUpdate }
+            if (draftUpdate.interfaces && Array.isArray(draftUpdate.interfaces)) {
+              const steps = (draftUpdate.interfaces as string[]).map((id: string) => {
+                const a = apis.find((x) => x.id === id)
+                return { type: 'api', apiId: id, label: a?.name || id }
+              })
+              next.flow = { type: 'sequence', steps }
+            }
+            store.setAppCreatorDraft(next)
+          }
+        }
+        
+        // 打开浏览器
+        if (data.browserUrl) {
+          store.setBrowserUrl(data.browserUrl)
+          store.setShowBrowserSimulator(true)
+        }
+        
+        cleanupSse()
+        scrollToBottom('smooth', 100)
+      }
+    } catch {
+      // 忽略格式错误的消息
     }
   }
+
+  // 错误处理
+  eventSource.onerror = () => {
+    cleanupSse()
+    if (!assistantContent) {
+      const errMsg: ChatMessage = {
+        id: 'msg-' + Date.now(),
+        role: 'assistant',
+        content: '连接出错，请稍后重试。',
+        timestamp: new Date().toISOString(),
+      }
+      setTarget([...getCurrentMessages(), errMsg])
+    }
+    scrollToBottom('smooth', 50)
+  }
+}
 
   const confirmCreateApp = async () => {
     if (!pendingCreation) return
@@ -930,7 +959,10 @@ export default function ChatWindow() {
     steps[stepIndex] = { ...step, params }
     store.setAppCreatorDraft({ ...appCreatorDraft, flow: { ...flow, steps } })
   }
-
+  const {
+    sidebarCollapsed,
+    setSidebarCollapsed,
+  } = store
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -940,15 +972,56 @@ export default function ChatWindow() {
       {/* Header */}
       <div className="h-14 bg-white border-b border-[#e5e6eb] flex items-center px-5 justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
+          {/* 默认进来 */}
           {!selectedMicroApp ? (
             <>
-              <span className="text-[15px] font-semibold">⚙️ OpenCraft 智能助手</span>
+             <button
+                className="p-1.5 rounded hover:bg-[#f2f3f5] text-[#86909c] transition-colors"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                title={sidebarCollapsed ? '展开' : '收起'}
+              >
+            {sidebarCollapsed ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            )}
+          </button>
+              {/* <span className="text-[15px] font-semibold">⚙️ OpenCraft 智能助手</span> */}
+              <span className="text-[15px] font-semibold">OpenCraft 智能助手</span>
               <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-[#e8f3ff] text-[#165dff]">通用对话</span>
               {currentDomain && <span className="text-xs px-2.5 py-[3px] rounded bg-[#f5e8ff] text-[#722ed1] font-medium">{currentDomain}</span>}
             </>
           ) : (
             <>
-              <span className="text-[15px] font-semibold">{selectedMicroApp.name}</span>
+             <button
+                className="p-1.5 rounded hover:bg-[#f2f3f5] text-[#86909c] transition-colors"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                title={sidebarCollapsed ? '展开' : '收起'}
+              >
+                {sidebarCollapsed ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                )}
+              </button>
+            {/* 选中了左侧的收藏夹/系统预置 */}
+            {
+              !sidebarCollapsed?(<><Tooltip title={selectedMicroApp.name}>
+                <span className="text-[15px] font-semibold cursor-pointer hover:text-blue-500">
+                  {selectedMicroApp.name?.length > 7
+                    ? selectedMicroApp.name.slice(0, 7) + '...'
+                    : selectedMicroApp.name}
+                </span>
+              </Tooltip></>):(<span>{selectedMicroApp.name}</span>)
+            }
               <span className="text-[11px] px-2 py-0.5 rounded font-medium bg-[#e8ffea] text-[#00b42a]">专属对话</span>
               {currentDomain && <span className="text-xs px-2.5 py-[3px] rounded bg-[#f5e8ff] text-[#722ed1] font-medium">{currentDomain}</span>}
             </>
@@ -963,6 +1036,22 @@ export default function ChatWindow() {
               ← 返回通用对话
             </button>
           )}
+      
+           <Select 
+              defaultValue="P00001100" 
+              placeholder="请选择" 
+              onChange={(val) => {
+                console.log("选中的值：", val);
+                setCurrentAccount(val);
+              }} 
+              style={{ width: 150 }} 
+              size="middle">
+                {accountOptions.map((item) => (
+                  <Option key={item.key} value={item.key}>
+                    {item.key}
+                  </Option>
+                ))}
+            </Select>
           {/* 更多菜单 */}
           <div className="relative group">
             <button
@@ -1349,7 +1438,7 @@ export default function ChatWindow() {
                 <br />
                 您可以向我提问任何问题，我会自动识别并调用对应的微应用。
               </div>
-              <div className="flex gap-2 flex-wrap">
+              {/* <div className="flex gap-2 flex-wrap">
                 {microApps.slice(0, 8).map((app) => (
                   <span
                     key={app.id}
@@ -1360,7 +1449,7 @@ export default function ChatWindow() {
                     {app.name}
                   </span>
                 ))}
-              </div>
+              </div> */}
             </div>
 
             {/* Global Chat */}
@@ -1909,7 +1998,7 @@ export default function ChatWindow() {
                     }
                   }}
                   placeholder={`与 ${selectedMicroApp.name} 对话，或输入"执行"开始运行...`}
-                  rows={1}
+                  rows={2}
                   disabled={isThinking}
                 />
                 <button

@@ -6,7 +6,7 @@ import ApiList from '@/components/ApiCatalog/ApiList'
 import Toast from '@/components/Common/Toast'
 
 export default function Layout() {
-  const { setIsOnline } = useStore()
+  const { setIsOnline, sidebarCollapsed } = useStore()
 
   useEffect(() => {
     const online = () => setIsOnline(true)
@@ -24,7 +24,7 @@ export default function Layout() {
     <div className="flex h-screen overflow-hidden bg-[#f5f6f7] text-[#1a1a1a]">
       <Toast />
       {/* Sidebar */}
-      <aside className="w-[280px] bg-white border-r border-[#e5e6eb] flex flex-col flex-shrink-0">
+      <aside className={`${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-[280px]'} bg-white border-r border-[#e5e6eb] flex flex-col flex-shrink-0 transition-all duration-300`}>
         <AppList />
       </aside>
 

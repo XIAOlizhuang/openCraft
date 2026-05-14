@@ -212,27 +212,29 @@ export default function ApiList() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex border-b border-[#e5e6eb]">
-        <div
-          className={`flex-1 text-center py-2.5 text-[13px] cursor-pointer transition-colors ${
-            rightPanelView === 'digital_twin'
-              ? 'text-[#165dff] border-b-2 border-[#165dff] font-medium'
-              : 'text-[#86909c] hover:text-[#4e5969]'
-          }`}
-          onClick={switchToDigitalTwin}
-        >
-          电网数字孪生服务
-        </div>
-        <div
-          className={`flex-1 text-center py-2.5 text-[13px] cursor-pointer transition-colors ${
-            rightPanelView === 'other'
-              ? 'text-[#165dff] border-b-2 border-[#165dff] font-medium'
-              : 'text-[#86909c] hover:text-[#4e5969]'
-          }`}
-          onClick={switchToOther}
-        >
-          扩展服务
+      {/* Tabs - 胶囊按钮风格 */}
+      <div className="flex justify-center py-3 px-4">
+        <div className="inline-flex bg-[#f2f3f5] rounded-full p-1">
+          <div
+            className={`px-4 py-1.5 text-[13px] cursor-pointer rounded-full transition-all duration-300 ${
+              rightPanelView === 'digital_twin'
+                ? 'bg-white text-[#165dff] font-medium shadow-sm'
+                : 'text-[#86909c] hover:text-[#4e5969]'
+            }`}
+            onClick={switchToDigitalTwin}
+          >
+            电网数字孪生服务
+          </div>
+          <div
+            className={`px-4 py-1.5 text-[13px] cursor-pointer rounded-full transition-all duration-300 ${
+              rightPanelView === 'other'
+                ? 'bg-white text-[#165dff] font-medium shadow-sm'
+                : 'text-[#86909c] hover:text-[#4e5969]'
+            }`}
+            onClick={switchToOther}
+          >
+            扩展服务
+          </div>
         </div>
       </div>
 
@@ -248,7 +250,7 @@ export default function ApiList() {
                 />
               </div>
               {/* Quick filter tags */}
-              <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
+              {/* <div className="flex gap-1.5 px-3 pb-2.5 flex-wrap">
                 {['全部', '电网中台', '巡视', '缺陷', '避雷器', '变电站', '线路', '变压器', '开关柜'].map((tag) => (
                   <span
                     key={tag}
@@ -262,7 +264,7 @@ export default function ApiList() {
                     {tag}
                   </span>
                 ))}
-              </div>
+              </div> */}
               {/* List */}
               <div className="flex-1 overflow-y-auto p-3">
                 {loadingApis ? (
