@@ -4,7 +4,7 @@ import { microAppApi, dataApi } from '@/services/api'
 import FlowChart from '@/components/Common/FlowChart'
 import BrowserSimulator from '@/components/Common/BrowserSimulator'
 import type { ChatMessage } from '@/types'
-import { Select,Tooltip,Modal } from 'antd'
+import { Select,Tooltip,Modal,message } from 'antd'
 import {API_PREFIX} from '@/services/api'
 const { Option } = Select;
 const accountOptions = [
@@ -744,7 +744,7 @@ export default function ChatWindow() {
         await loadExecutionHistory(appId)
       }
     } catch (e: any) {
-      store.showToast('执行失败：' + e.message, 'error')
+      message.error('执行失败：' + e.message)
     } finally {
       store.setExecutingApp('')
     }
@@ -962,9 +962,9 @@ export default function ChatWindow() {
       // Refresh my apps
       const res = await microAppApi.list('user')
       store.setMyMicroApps(res.data.items || [])
-      store.showToast('微应用创建成功', 'success')
+      message.success('微应用创建成功')
     } catch (e: any) {
-      store.showToast('创建失败：' + e.message, 'error')
+      message.error('创建失败：' + e.message)
     }
   }
 
@@ -1009,7 +1009,7 @@ export default function ChatWindow() {
 
   const loadJsonData = async () => {
     if (!jsonInput.trim()) {
-      store.showToast('请输入 JSON 数据', 'error')
+      message.error('请输入 JSON 数据')
       return
     }
     try {
@@ -1017,9 +1017,9 @@ export default function ChatWindow() {
       await dataApi.load(payload)
       store.setShowJsonEditor(false)
       store.setJsonInput('')
-      store.showToast('加载成功', 'success')
+      message.success('加载成功')
     } catch (e: any) {
-      store.showToast('JSON 格式错误：' + e.message, 'error')
+      message.error('JSON 格式错误：' + e.message)
     }
   }
 
@@ -1036,9 +1036,9 @@ export default function ChatWindow() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      store.showToast('导出成功', 'success')
+      message.success('导出成功')
     } catch {
-      store.showToast('导出失败', 'error')
+      message.error('导出失败')
     }
   }
 
@@ -1046,7 +1046,7 @@ export default function ChatWindow() {
     if (!appCreatorDraft) return
     const name = String(appCreatorDraft.name || '').trim()
     if (!name) {
-      store.showToast('请填写应用名称', 'error')
+      message.error('请填写应用名称')
       return
     }
     try {
@@ -1057,9 +1057,9 @@ export default function ChatWindow() {
       store.setBuildMessages([])
       const res = await microAppApi.list('user')
       store.setMyMicroApps(res.data.items || [])
-      store.showToast('微应用创建成功', 'success')
+      message.success('微应用创建成功')
     } catch (e: any) {
-      store.showToast('创建失败：' + e.message, 'error')
+      message.error('创建失败：' + e.message)
     }
   }
 
@@ -1088,7 +1088,7 @@ export default function ChatWindow() {
   // Render
   // ---------------------------------------------------------------------------
 
-  return (
+ return (
     <>
       {/* Header */}
       <div className="h-14 bg-white border-b border-[#e5e6eb] flex items-center px-5 justify-between flex-shrink-0">
@@ -1226,359 +1226,775 @@ export default function ChatWindow() {
         </div>
       )}
 
-      {showAppCreator ? (
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
-          {/* Form area */}
-          <div className="flex-1 overflow-y-auto p-5">
-            <div className="max-w-2xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <div className="text-lg font-semibold text-[#1a1a1a]">创建微应用</div>
-                  <div className="text-xs text-[#86909c] mt-1">手动填写信息并组装接口流程，或在下方通过对话让助手辅助完善</div>
-                </div>
-                <button
-                  className="text-lg text-[#86909c] hover:text-[#1a1a1a] w-8 h-8 flex items-center justify-center rounded hover:bg-[#f2f3f5] transition-colors"
-                  onClick={() => { store.setShowAppCreator(false); store.setAppCreatorDraft(null); store.setChatMode('global') }}
-                >
-                  ×
-                </button>
+      {/* 创建微应用 Modal */}
+      <Modal
+        title={
+          <div>
+            <div className="text-lg font-semibold text-[#1a1a1a]">创建微应用</div>
+            <div className="text-xs text-[#86909c] mt-1">手动填写信息并组装接口流程，或在下方通过对话让助手辅助完善</div>
+          </div>
+        }
+        open={showAppCreator}
+        onCancel={() => { 
+          store.setShowAppCreator(false); 
+          store.setAppCreatorDraft(null); 
+          store.setChatMode('global') 
+        }}
+        footer={null}
+        width={800}
+        style={{ top: 20 }}
+        bodyStyle={{ padding: 0, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+      >
+        <div className="px-6 py-4">
+          {/* 基本信息 */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用名称 *</label>
+              <input
+                className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
+                value={String(appCreatorDraft?.name || '')}
+                onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, name: e.target.value })}
+                placeholder="例如：避雷器动作监视"
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用描述</label>
+              <textarea
+                className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff] resize-y min-h-[60px]"
+                value={String(appCreatorDraft?.description || '')}
+                onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, description: e.target.value })}
+                placeholder="描述这个微应用的用途..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">触发条件</label>
+                <input
+                  className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
+                  value={String(appCreatorDraft?.trigger || '')}
+                  onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, trigger: e.target.value })}
+                  placeholder="例如：每日 9:00"
+                />
               </div>
-
-              {/* 基本信息 */}
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用名称 *</label>
-                  <input
-                    className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
-                    value={String(appCreatorDraft?.name || '')}
-                    onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, name: e.target.value })}
-                    placeholder="例如：避雷器动作监视"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用描述</label>
-                  <textarea
-                    className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff] resize-y min-h-[60px]"
-                    value={String(appCreatorDraft?.description || '')}
-                    onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, description: e.target.value })}
-                    placeholder="描述这个微应用的用途..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">触发条件</label>
-                    <input
-                      className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
-                      value={String(appCreatorDraft?.trigger || '')}
-                      onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, trigger: e.target.value })}
-                      placeholder="例如：每日 9:00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用类型</label>
-                    <select
-                      className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff] bg-white"
-                      value={String(appCreatorDraft?.app_type || 'query')}
-                      onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, app_type: e.target.value })}
-                    >
-                      <option value="query">查询型</option>
-                      <option value="generation">生成型</option>
-                      <option value="scheduled">定时任务</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* 接口选择 */}
-              <div className="mb-6">
-                <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">选择接口</div>
-                <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto border border-[#e5e6eb] rounded-md p-2">
-                  {apis.length === 0 ? (
-                    <div className="text-center py-4 text-[#86909c] text-xs">暂无可用接口</div>
-                  ) : (
-                    apis.map((api) => {
-                      const selected = ((appCreatorDraft?.interfaces as string[]) || []).includes(api.id)
-                      return (
-                        <label
-                          key={api.id}
-                          className={`flex items-center gap-2 px-2.5 py-2 rounded cursor-pointer transition-colors ${
-                            selected ? 'bg-[#e8f3ff]' : 'hover:bg-[#f2f3f5]'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => {
-                              const current = ((appCreatorDraft?.interfaces as string[]) || [])
-                              const updated = selected ? current.filter((id) => id !== api.id) : [...current, api.id]
-                              const existingSteps = ((appCreatorDraft?.flow as any)?.steps as any[]) || []
-                              const steps = updated.map((id) => {
-                                const existing = existingSteps.find((s: any) => s.apiId === id)
-                                const a = apis.find((x) => x.id === id)
-                                return existing
-                                  ? { ...existing, type: 'api', apiId: id, label: a?.name || id }
-                                  : { type: 'api', apiId: id, label: a?.name || id }
-                              })
-                              store.setAppCreatorDraft({
-                                ...appCreatorDraft!,
-                                interfaces: updated,
-                                flow: { type: 'sequence', steps },
-                              })
-                            }}
-                            className="accent-[#165dff]"
-                          />
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                              api.method === 'GET'
-                                ? 'bg-[#e8ffea] text-[#00b42a]'
-                                : api.method === 'POST'
-                                ? 'bg-[#e8f3ff] text-[#165dff]'
-                                : api.method === 'PUT'
-                                ? 'bg-[#fff7e8] text-[#ff7d00]'
-                                : 'bg-[#ffe8e8] text-[#f53f3f]'
-                            }`}
-                          >
-                            {api.method}
-                          </span>
-                          <span className="text-[13px] text-[#1a1a1a] flex-1 min-w-0 truncate">{api.name}</span>
-                        </label>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* 参数映射配置 */}
-              {((appCreatorDraft?.interfaces as string[]) || []).length > 0 && (
-                <div className="mb-6">
-                  <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">参数映射配置</div>
-                  <div className="space-y-3">
-                    {((appCreatorDraft?.flow as any)?.steps || []).map((step: any, idx: number) => {
-                      const api = apis.find((a) => a.id === step.apiId)
-                      if (!api) return null
-                      const paramDefs = api.params ? Object.entries(api.params as Record<string, any>) : []
-                      const stepParams = (step.params || []) as any[]
-                      return (
-                        <div key={step.apiId} className="border border-[#e5e6eb] rounded-md p-3 bg-white">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-[#e8f3ff] text-[#165dff]">{api.method}</span>
-                            <span className="text-[13px] font-medium text-[#1a1a1a]">{api.name}</span>
-                            <span className="text-[11px] text-[#86909c]">步骤 {idx + 1}</span>
-                          </div>
-                          {paramDefs.length === 0 && (
-                            <div className="text-[11px] text-[#86909c]">该接口无预设参数，如需配置请先完善接口定义。</div>
-                          )}
-                          {paramDefs.map(([paramName, paramInfo]: [string, any]) => {
-                            const binding = stepParams.find((p: any) => p.name === paramName) || {
-                              name: paramName,
-                              source: 'static',
-                              value: '',
-                              mapping: '',
-                            }
-                            return (
-                              <div key={paramName} className="flex items-center gap-2 mb-2 last:mb-0">
-                                <span className="text-[12px] text-[#1a1a1a] w-24 truncate" title={paramInfo.description}>{paramName}</span>
-                                <select
-                                  className="text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
-                                  value={binding.source}
-                                  onChange={(e) => updateParamBinding(idx, paramName, { ...binding, source: e.target.value })}
-                                >
-                                  <option value="static">固定值</option>
-                                  <option value="user_input">用户输入</option>
-                                  <option value="prev_step">上一步输出</option>
-                                </select>
-                                {binding.source === 'static' && (
-                                  <input
-                                    className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
-                                    placeholder="固定值"
-                                    value={binding.value}
-                                    onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
-                                  />
-                                )}
-                                {binding.source === 'user_input' && (
-                                  <input
-                                    className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
-                                    placeholder="参数提示，如：请输入变电站ID"
-                                    value={binding.value}
-                                    onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
-                                  />
-                                )}
-                                {binding.source === 'prev_step' && (
-                                  <>
-                                    <select
-                                      className="w-28 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
-                                      value={binding.value}
-                                      onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
-                                    >
-                                      <option value="">选择步骤</option>
-                                      {Array.from({ length: idx }).map((_, i) => {
-                                        const prevStep = (appCreatorDraft?.flow as any)?.steps?.[i]
-                                        const prevApi = apis.find((a) => a.id === prevStep?.apiId)
-                                        return (
-                                          <option key={i} value={String(i)}>步骤{i + 1} · {prevApi?.name || '未知'}</option>
-                                        )
-                                      })}
-                                    </select>
-                                    <input
-                                      className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
-                                      placeholder="JSON path，如 data.0.id"
-                                      value={binding.mapping}
-                                      onChange={(e) => updateParamBinding(idx, paramName, { ...binding, mapping: e.target.value })}
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 流程预览 */}
-              {((appCreatorDraft?.interfaces as string[]) || []).length > 0 && (
-                <div className="mb-6">
-                  <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">调用流程预览</div>
-                  <div className="bg-[#f8f9fa] rounded-md p-4 border border-[#e5e6eb]">
-                    <FlowChart flow={appCreatorDraft?.flow as any} apis={apiMap()} />
-                  </div>
-                </div>
-              )}
-
-              {/* 操作按钮 */}
-              <div className="flex justify-end gap-2 pt-2 pb-4">
-                <button
-                  className="px-4 py-2 rounded-md text-[13px] bg-[#f2f3f5] text-[#1a1a1a] border border-[#e5e6eb] hover:bg-[#e5e6eb] transition-colors"
-                  onClick={() => { store.setShowAppCreator(false); store.setAppCreatorDraft(null); store.setChatMode('global') }}
+              <div>
+                <label className="block text-[13px] font-medium text-[#1a1a1a] mb-1.5">应用类型</label>
+                <select
+                  className="w-full px-3 py-2 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff] bg-white"
+                  value={String(appCreatorDraft?.app_type || 'query')}
+                  onChange={(e) => store.setAppCreatorDraft({ ...appCreatorDraft!, app_type: e.target.value })}
                 >
-                  取消
-                </button>
-                <button
-                  className="px-4 py-2 rounded-md text-[13px] bg-[#165dff] text-white hover:bg-[#114ec2] transition-colors"
-                  onClick={handleCreateApp}
-                >
-                  创建微应用
-                </button>
+                  <option value="query">查询型</option>
+                  <option value="generation">生成型</option>
+                  <option value="scheduled">定时任务</option>
+                </select>
               </div>
             </div>
           </div>
 
-          {/* Conversation assistant */}
-          <div className="border-t border-[#e5e6eb] bg-white flex-shrink-0 h-[420px] flex flex-col">
-            {/* Header */}
-            <div className="px-4 py-2.5 border-b border-[#e5e6eb] bg-[#f7f8fa] flex items-center gap-2">
-              <span className="text-sm">🤖</span>
-              <span className="text-[13px] font-medium text-[#1a1a1a]">智能辅助对话</span>
-              <span className="text-[11px] text-[#86909c]">· 描述需求即可自动修改上方表单</span>
-            </div>
-
-            {/* Message list */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" onClick={handleLinkClick}>
-              {store.buildMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-[#86909c]">
-                  <div className="text-3xl mb-2">💬</div>
-                  <div className="text-sm mb-1">智能助手已就绪</div>
-                  <div className="text-xs text-center max-w-[260px] leading-relaxed">
-                    在下方输入需求，例如“再加一个电缆接口”或“把名称改成设备巡检”，助手会自动帮您修改上方表单。
-                  </div>
-                </div>
+          {/* 接口选择 */}
+          <div className="mb-6">
+            <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">选择接口</div>
+            <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto border border-[#e5e6eb] rounded-md p-2">
+              {apis.length === 0 ? (
+                <div className="text-center py-4 text-[#86909c] text-xs">暂无可用接口</div>
+              ) : (
+                apis.map((api) => {
+                  const selected = ((appCreatorDraft?.interfaces as string[]) || []).includes(api.id)
+                  return (
+                    <label
+                      key={api.id}
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded cursor-pointer transition-colors ${
+                        selected ? 'bg-[#e8f3ff]' : 'hover:bg-[#f2f3f5]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => {
+                          const current = ((appCreatorDraft?.interfaces as string[]) || [])
+                          const updated = selected ? current.filter((id) => id !== api.id) : [...current, api.id]
+                          const existingSteps = ((appCreatorDraft?.flow as any)?.steps as any[]) || []
+                          const steps = updated.map((id) => {
+                            const existing = existingSteps.find((s: any) => s.apiId === id)
+                            const a = apis.find((x) => x.id === id)
+                            return existing
+                              ? { ...existing, type: 'api', apiId: id, label: a?.name || id }
+                              : { type: 'api', apiId: id, label: a?.name || id }
+                          })
+                          store.setAppCreatorDraft({
+                            ...appCreatorDraft!,
+                            interfaces: updated,
+                            flow: { type: 'sequence', steps },
+                          })
+                        }}
+                        className="accent-[#165dff]"
+                      />
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                          api.method === 'GET'
+                            ? 'bg-[#e8ffea] text-[#00b42a]'
+                            : api.method === 'POST'
+                            ? 'bg-[#e8f3ff] text-[#165dff]'
+                            : api.method === 'PUT'
+                            ? 'bg-[#fff7e8] text-[#ff7d00]'
+                            : 'bg-[#ffe8e8] text-[#f53f3f]'
+                        }`}
+                      >
+                        {api.method}
+                      </span>
+                      <span className="text-[13px] text-[#1a1a1a] flex-1 min-w-0 truncate">{api.name}</span>
+                    </label>
+                  )
+                })
               )}
-              {store.buildMessages.map((msg) => (
-                <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                  {msg.role === 'assistant' && (
-                    <div className="w-7 h-7 rounded-full bg-[#f2f3f5] flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🤖</div>
-                  )}
-                  <div
-                    className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed max-w-[85%] shadow-sm ${
-                      msg.role === 'user'
-                        ? 'bg-[#165dff] text-white rounded-br-md'
-                        : 'bg-[#f8f9fa] text-[#1a1a1a] border border-[#e5e6eb] rounded-bl-md'
-                    }`}
-                    dangerouslySetInnerHTML={{
-                      __html: msg.role === 'assistant' ? renderContent(msg.content) : escapeHtml(msg.content),
-                    }}
-                  />
-                  {msg.role === 'user' && (
-                    <div className="w-7 h-7 rounded-full bg-[#165dff] flex items-center justify-center text-sm flex-shrink-0 mt-0.5 text-white">👤</div>
-                  )}
-                </div>
-              ))}
-              {isThinking && (
-                <div className="flex gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-[#f2f3f5] flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🤖</div>
-                  <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed bg-[#f8f9fa] text-[#86909c] border border-[#e5e6eb] rounded-bl-md shadow-sm">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.15s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.3s]" />
-                      正在思考…
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
+          </div>
 
-            {/* Input area */}
-            <div className="px-4 py-3 border-t border-[#e5e6eb] bg-white flex gap-2 items-end">
-              <textarea
-                className="chat-input flex-1 px-3.5 py-2.5 border border-[#d9d9d9] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff] focus:ring-1 focus:ring-[#165dff]/20 transition-all bg-[#f8f9fa]"
-                value={inputText}
-                onChange={(e) => store.setInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    sendMessage()
-                  }
-                }}
-                placeholder="描述需求，例如：再加一个电缆接口…"
-                rows={1}
-                disabled={isThinking}
-              />
-              <button
-                className="px-4 py-2.5 rounded-lg text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
-                onClick={sendMessage}
-                disabled={isThinking || !inputText.trim()}
-              >
-                发送
-              </button>
+          {/* 参数映射配置 */}
+          {((appCreatorDraft?.interfaces as string[]) || []).length > 0 && (
+            <div className="mb-6">
+              <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">参数映射配置</div>
+              <div className="space-y-3">
+                {((appCreatorDraft?.flow as any)?.steps || []).map((step: any, idx: number) => {
+                  const api = apis.find((a) => a.id === step.apiId)
+                  if (!api) return null
+                  const paramDefs = api.params ? Object.entries(api.params as Record<string, any>) : []
+                  const stepParams = (step.params || []) as any[]
+                  return (
+                    <div key={step.apiId} className="border border-[#e5e6eb] rounded-md p-3 bg-white">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-[#e8f3ff] text-[#165dff]">{api.method}</span>
+                        <span className="text-[13px] font-medium text-[#1a1a1a]">{api.name}</span>
+                        <span className="text-[11px] text-[#86909c]">步骤 {idx + 1}</span>
+                      </div>
+                      {paramDefs.length === 0 && (
+                        <div className="text-[11px] text-[#86909c]">该接口无预设参数，如需配置请先完善接口定义。</div>
+                      )}
+                      {paramDefs.map(([paramName, paramInfo]: [string, any]) => {
+                        const binding = stepParams.find((p: any) => p.name === paramName) || {
+                          name: paramName,
+                          source: 'static',
+                          value: '',
+                          mapping: '',
+                        }
+                        return (
+                          <div key={paramName} className="flex items-center gap-2 mb-2 last:mb-0">
+                            <span className="text-[12px] text-[#1a1a1a] w-24 truncate" title={paramInfo.description}>{paramName}</span>
+                            <select
+                              className="text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
+                              value={binding.source}
+                              onChange={(e) => updateParamBinding(idx, paramName, { ...binding, source: e.target.value })}
+                            >
+                              <option value="static">固定值</option>
+                              <option value="user_input">用户输入</option>
+                              <option value="prev_step">上一步输出</option>
+                            </select>
+                            {binding.source === 'static' && (
+                              <input
+                                className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
+                                placeholder="固定值"
+                                value={binding.value}
+                                onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
+                              />
+                            )}
+                            {binding.source === 'user_input' && (
+                              <input
+                                className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
+                                placeholder="参数提示，如：请输入变电站ID"
+                                value={binding.value}
+                                onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
+                              />
+                            )}
+                            {binding.source === 'prev_step' && (
+                              <>
+                                <select
+                                  className="w-28 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
+                                  value={binding.value}
+                                  onChange={(e) => updateParamBinding(idx, paramName, { ...binding, value: e.target.value })}
+                                >
+                                  <option value="">选择步骤</option>
+                                  {Array.from({ length: idx }).map((_, i) => {
+                                    const prevStep = (appCreatorDraft?.flow as any)?.steps?.[i]
+                                    const prevApi = apis.find((a) => a.id === prevStep?.apiId)
+                                    return (
+                                      <option key={i} value={String(i)}>步骤{i + 1} · {prevApi?.name || '未知'}</option>
+                                    )
+                                  })}
+                                </select>
+                                <input
+                                  className="flex-1 text-[12px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff]"
+                                  placeholder="JSON path，如 data.0.id"
+                                  value={binding.mapping}
+                                  onChange={(e) => updateParamBinding(idx, paramName, { ...binding, mapping: e.target.value })}
+                                />
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+          )}
+
+          {/* 流程预览 */}
+          {((appCreatorDraft?.interfaces as string[]) || []).length > 0 && (
+            <div className="mb-6">
+              <div className="text-[13px] font-medium text-[#1a1a1a] mb-2">调用流程预览</div>
+              <div className="bg-[#f8f9fa] rounded-md p-4 border border-[#e5e6eb]">
+                <FlowChart flow={appCreatorDraft?.flow as any} apis={apiMap()} />
+              </div>
+            </div>
+          )}
+
+          {/* 操作按钮 */}
+          <div className="flex justify-end gap-2 pt-2 pb-4">
+            <button
+              className="px-4 py-2 rounded-md text-[13px] bg-[#f2f3f5] text-[#1a1a1a] border border-[#e5e6eb] hover:bg-[#e5e6eb] transition-colors"
+              onClick={() => { store.setShowAppCreator(false); store.setAppCreatorDraft(null); store.setChatMode('global') }}
+            >
+              取消
+            </button>
+            <button
+              className="px-4 py-2 rounded-md text-[13px] bg-[#165dff] text-white hover:bg-[#114ec2] transition-colors"
+              onClick={handleCreateApp}
+            >
+              创建微应用
+            </button>
           </div>
         </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-5" ref={outerScrollRef}>
+      </Modal>
+
+      {/* Conversation assistant - 智能辅助对话区域 */}
+      {showAppCreator && store.buildMessages.length > 0 && (
+        <div className="border-t border-[#e5e6eb] bg-white flex-shrink-0 h-[420px] flex flex-col">
+          {/* Header */}
+          <div className="px-4 py-2.5 border-b border-[#e5e6eb] bg-[#f7f8fa] flex items-center gap-2">
+            <span className="text-sm">🤖</span>
+            <span className="text-[13px] font-medium text-[#1a1a1a]">智能辅助对话</span>
+            <span className="text-[11px] text-[#86909c]">· 描述需求即可自动修改上方表单</span>
+          </div>
+
+          {/* Message list */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" onClick={handleLinkClick}>
+            {store.buildMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-[#86909c]">
+                <div className="text-3xl mb-2">💬</div>
+                <div className="text-sm mb-1">智能助手已就绪</div>
+                <div className="text-xs text-center max-w-[260px] leading-relaxed">
+                  在下方输入需求，例如“再加一个电缆接口”或“把名称改成设备巡检”，助手会自动帮您修改上方表单。
+                </div>
+              </div>
+            )}
+            {store.buildMessages.map((msg) => (
+              <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                {msg.role === 'assistant' && (
+                  <div className="w-7 h-7 rounded-full bg-[#f2f3f5] flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🤖</div>
+                )}
+                <div
+                  className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed max-w-[85%] shadow-sm ${
+                    msg.role === 'user'
+                      ? 'bg-[#165dff] text-white rounded-br-md'
+                      : 'bg-[#f8f9fa] text-[#1a1a1a] border border-[#e5e6eb] rounded-bl-md'
+                  }`}
+                  dangerouslySetInnerHTML={{
+                    __html: msg.role === 'assistant' ? renderContent(msg.content) : escapeHtml(msg.content),
+                  }}
+                />
+                {msg.role === 'user' && (
+                  <div className="w-7 h-7 rounded-full bg-[#165dff] flex items-center justify-center text-sm flex-shrink-0 mt-0.5 text-white">👤</div>
+                )}
+              </div>
+            ))}
+            {isThinking && (
+              <div className="flex gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-[#f2f3f5] flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🤖</div>
+                <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed bg-[#f8f9fa] text-[#86909c] border border-[#e5e6eb] rounded-bl-md shadow-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.15s]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.3s]" />
+                    正在思考…
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input area */}
+          <div className="px-4 py-3 border-t border-[#e5e6eb] bg-white flex gap-2 items-end">
+            <textarea
+              className="chat-input flex-1 px-3.5 py-2.5 border border-[#d9d9d9] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff] focus:ring-1 focus:ring-[#165dff]/20 transition-all bg-[#f8f9fa]"
+              value={inputText}
+              onChange={(e) => store.setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  sendMessage()
+                }
+              }}
+              placeholder="描述需求，例如：再加一个电缆接口…"
+              rows={1}
+              disabled={isThinking}
+            />
+            <button
+              className="px-4 py-2.5 rounded-lg text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
+              onClick={sendMessage}
+              disabled={isThinking || !inputText.trim()}
+            >
+              发送
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 主内容区域 - 仅在非创建微应用模式时显示 */}
+      {!showAppCreator && (
+        <div className="flex-1 flex flex-col min-h-0 p-5" ref={outerScrollRef}>
           {/* ==================== Global Mode ==================== */}
           {!selectedMicroApp && (
             <>
               {/* Welcome Card */}
               <div className="rounded-xl p-7 mb-4 text-white" style={{ background: 'linear-gradient(135deg, #165dff 0%, #114ec2 100%)' }}>
-              <div className="text-xl font-semibold mb-2">欢迎使用数字孪生智能助手</div>
-              <div className="text-sm opacity-90 leading-relaxed mb-4">
-                当前场景为 <strong>{currentDomain || '数字孪生'}</strong>，共有 {microApps.length} 个微应用、{apis.length} 个 API 接口。
-                <br />
-                您可以向我提问任何问题，我会自动识别并调用对应的微应用。
+                <div className="text-xl font-semibold mb-2">欢迎使用数字孪生智能助手</div>
+                <div className="text-sm opacity-90 leading-relaxed mb-4">
+                  当前场景为 <strong>{currentDomain || '数字孪生'}</strong>，共有 {microApps.length} 个微应用、{apis.length} 个 API 接口。
+                  <br />
+                  您可以向我提问任何问题，我会自动识别并调用对应的微应用。
+                </div>
               </div>
-              {/* <div className="flex gap-2 flex-wrap">
-                {microApps.slice(0, 8).map((app) => (
-                  <span
-                    key={app.id}
-                    className="px-2.5 py-1 rounded text-xs cursor-pointer transition-colors"
-                    style={{ background: 'rgba(255,255,255,0.15)' }}
-                    onClick={() => sendQuick(app.name + '状态')}
-                  >
-                    {app.name}
-                  </span>
-                ))}
-              </div> */}
-            </div>
 
-            {/* Global Chat */}
-            <div className="bg-white rounded-lg border border-[#e5e6eb] flex flex-col" style={{ minHeight: '520px' }}>
-              <div className="px-4 py-3 border-b border-[#e5e6eb] flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold">⚙️ OpenCraft 智能助手 · 通用对话</div>
-                  <div className="text-xs text-[#86909c]">我可以帮您调用任意微应用，请描述您的需求</div>
+              {/* Global Chat */}
+              <div className="bg-white rounded-lg border border-[#e5e6eb] flex flex-col flex-1 min-h-0">
+                <div className="px-4 py-3 border-b border-[#e5e6eb] flex items-center justify-between flex-shrink-0">
+                  <div>
+                    <div className="text-sm font-semibold">⚙️ OpenCraft 智能助手 · 通用对话</div>
+                    <div className="text-xs text-[#86909c]">我可以帮您调用任意微应用，请描述您的需求</div>
+                  </div>
+                  <div>
+                    <button
+                      className="text-xs text-[#86909c] px-2 py-1 rounded cursor-pointer hover:text-[#f53f3f] hover:bg-[#fff2f0] border border-transparent hover:border-[#ffccc7] transition-colors"
+                      onClick={clearMessages}
+                    >
+                      🗑️ 清空对话
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="flex-1 overflow-y-auto px-4 py-4"
+                  ref={messageScrollRef}
+                  onScroll={() => {
+                    userScrolledUp.current = !isNearBottom()
+                  }}
+                  onClick={handleLinkClick}
+                >
+                  {messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 text-[#86909c]">
+                      <div className="text-5xl mb-3">⚙️</div>
+                      <div className="text-sm">
+                        我是 OpenCraft 智能助手
+                        <br />
+                        在下方输入需求，我会帮你调用微应用
+                      </div>
+                    </div>
+                  )}
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex gap-2.5 mb-4 ${msg.role === 'user' ? 'ml-auto flex-row-reverse max-w-[85%]' : 'max-w-[85%]'}`}>
+                      <div
+                        className={`w-[34px] h-[34px] rounded-full flex items-center justify-center text-base flex-shrink-0 ${
+                          msg.role === 'user' ? 'bg-[#165dff] text-white' : 'bg-[#f2f3f5]'
+                        }`}
+                      >
+                        {msg.role === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div>
+                        <div
+                          className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words ${
+                            msg.role === 'user'
+                              ? 'bg-[#165dff] text-white rounded-br-md'
+                              : 'bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md max-h-[520px] overflow-y-auto scrollbar-thin'
+                          }`}
+                          dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }}
+                        />
+                        <div className="text-[11px] text-[#86909c] mt-1 text-right">{formatTime(msg.timestamp)}</div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Inline Browser Simulator — appears as part of the assistant reply */}
+                  {showBrowserSimulator && (
+                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
+                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
+                            <button
+                              className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
+                              onClick={() => store.setShowBrowserSimulator(false)}
+                            >
+                              收起
+                            </button>
+                          </div>
+                          <BrowserSimulator initialUrl={browserUrl} height={360} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {isThinking && (
+                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
+                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🤖</div>
+                      <div>
+                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
+                          <span className="inline-flex gap-1 items-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.1s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.2s]" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick tags */}
+                <div className="flex gap-1.5 px-4 py-2 flex-wrap border-t border-[#f2f3f5] flex-shrink-0">
+                  {globalQuickTags().map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2.5 py-1 rounded bg-[#f2f3f5] text-[#4e5969] cursor-pointer border border-[#e5e6eb] hover:border-[#165dff] hover:text-[#165dff] hover:bg-[#e8f3ff] transition-colors"
+                      onClick={() => sendQuick(tag)}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Creation confirmation card */}
+                {pendingCreation && (
+                  <div className="border border-[#165dff] rounded-lg mx-4 my-3 shadow-lg" style={{ boxShadow: '0 4px 12px rgba(22,93,255,0.1)' }}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e6eb] bg-[#e8f3ff] rounded-t-lg">
+                      <span className="text-sm font-semibold text-[#165dff]">🛠️ 确认创建微应用</span>
+                      <span className="text-lg text-[#86909c] cursor-pointer w-6 h-6 flex items-center justify-center rounded hover:bg-[#f2f3f5] hover:text-[#1a1a1a]" onClick={cancelCreateApp}>
+                        ×
+                      </span>
+                    </div>
+                    {/* Tabs */}
+                    <div className="flex border-b border-[#e5e6eb]">
+                      {[
+                        { key: 'basic', label: '基本信息' },
+                        { key: 'code', label: '代码预览' },
+                        { key: 'render', label: '渲染预览' },
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
+                            previewTab === tab.key
+                              ? 'text-[#165dff] bg-white border-b-2 border-[#165dff]'
+                              : 'text-[#86909c] hover:text-[#4e5969] hover:bg-[#f7f8fa]'
+                          }`}
+                          onClick={() => setPreviewTab(tab.key as any)}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-4 py-3">
+                      {previewTab === 'basic' && (
+                        <>
+                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                            <div className="w-[70px] text-[#86909c] flex-shrink-0">应用名称</div>
+                            <input
+                              className="flex-1 px-2.5 py-1.5 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
+                              value={String(pendingCreation.name || '')}
+                              onChange={(e) => store.setPendingCreation({ ...pendingCreation, name: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                            <div className="w-[70px] text-[#86909c] flex-shrink-0">应用描述</div>
+                            <input
+                              className="flex-1 px-2.5 py-1.5 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
+                              value={String(pendingCreation.description || '')}
+                              onChange={(e) => store.setPendingCreation({ ...pendingCreation, description: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                            <div className="w-[70px] text-[#86909c] flex-shrink-0">包含接口</div>
+                            <div className="flex-1">
+                              {Array.isArray(pendingCreation.interfaces) &&
+                                (pendingCreation.interfaces as string[]).map((apiId: string) => (
+                                  <span key={apiId} className="inline-block bg-[#e8f3ff] text-[#165dff] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
+                                    {apiMap()[apiId]?.name || apiId}
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                          {pendingCreation.code && (
+                            <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                              <div className="w-[70px] text-[#86909c] flex-shrink-0">执行代码</div>
+                              <div className="flex-1">
+                                <span className="inline-block bg-[#e8ffea] text-[#00b42a] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
+                                  已生成可执行代码
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {pendingCreation.workflow && Array.isArray((pendingCreation.workflow as any).steps) && ((pendingCreation.workflow as any).steps as any[]).length > 0 && (
+                            <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                              <div className="w-[70px] text-[#86909c] flex-shrink-0">用户步骤</div>
+                              <div className="flex-1 flex flex-col gap-1.5">
+                                {((pendingCreation.workflow as any).steps as any[]).map((step: any) => (
+                                  <div key={step.index} className="flex items-start gap-2 px-2 py-1.5 bg-[#f7f8fa] border border-[#e5e6eb] rounded-md text-[13px]">
+                                    <span className="w-5 h-5 flex items-center justify-center bg-[#86909c] text-white rounded-full text-[11px] font-semibold flex-shrink-0 mt-0.5">
+                                      {step.index}
+                                    </span>
+                                    <span className="flex-1">{String(step.description || '')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {pendingCreation.flow && (pendingCreation.flow as any).steps && Array.isArray((pendingCreation.flow as any).steps) ? (
+                            <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                              <div className="w-[70px] text-[#86909c] flex-shrink-0">
+                                调用流程 <span className="text-[#86909c] text-xs font-normal">（可删除步骤）</span>
+                              </div>
+                              <div className="flex-1 flex flex-col gap-1.5">
+                                {((pendingCreation.flow as any).steps as any[]).map((step, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 px-2 py-1.5 bg-[#f7f8fa] border border-[#e5e6eb] rounded-md text-[13px]">
+                                    <span className="w-5 h-5 flex items-center justify-center bg-[#165dff] text-white rounded-full text-[11px] font-semibold flex-shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <span className="flex-1">{step.label || step.apiId}</span>
+                                    <span
+                                      className="w-5 h-5 flex items-center justify-center text-[#86909c] cursor-pointer rounded hover:bg-[#ffece8] hover:text-[#f53f3f] text-base leading-none"
+                                      onClick={() => removeDraftStep(idx)}
+                                      title="删除此步骤"
+                                    >
+                                      ×
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                              <div className="w-[70px] text-[#86909c] flex-shrink-0">调用流程</div>
+                              <div className="flex-1 text-[#86909c]">暂无步骤，可从右侧接口列表添加</div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {previewTab === 'code' && (
+                        <div className="mt-1">
+                          {pendingCreation.code ? (
+                            <div className="code-block relative">
+                              <pre className="text-xs font-mono bg-[#f7f8fa] border border-[#e5e6eb] rounded-md p-3 overflow-x-auto max-h-[300px] overflow-y-auto">
+                                {String(pendingCreation.code || '')}
+                              </pre>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-[#86909c] text-center py-6">暂无代码，将使用 FlowNode 动态解释执行</div>
+                          )}
+                        </div>
+                      )}
+                      {previewTab === 'render' && (
+                        <div className="mt-1">
+                          {pendingCreation.render_config ? (
+                            <div className="code-block relative">
+                              <pre className="text-xs font-mono bg-[#f7f8fa] border border-[#e5e6eb] rounded-md p-3 overflow-x-auto max-h-[300px] overflow-y-auto">
+                                {JSON.stringify(pendingCreation.render_config, null, 2)}
+                              </pre>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-[#86909c] text-center py-6">暂无渲染配置，将使用默认 JSON 展示</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-2 px-4 py-2.5 border-t border-[#e5e6eb]">
+                      <button
+                        className="px-3 py-1.5 rounded-md text-[13px] bg-[#f2f3f5] text-[#1a1a1a] border border-[#e5e6eb] hover:bg-[#e5e6eb] transition-colors"
+                        onClick={cancelCreateApp}
+                      >
+                        取消
+                      </button>
+                      <button
+                        className="px-3 py-1.5 rounded-md text-[13px] bg-[#165dff] text-white hover:bg-[#114ec2] transition-colors"
+                        onClick={confirmCreateApp}
+                      >
+                        ✓ 确认创建
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Input */}
+                <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2 flex-shrink-0">
+                  <textarea
+                    autoFocus
+                    className="chat-input flex-1 px-3.5 py-2.5 border border-[#e5e6eb] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff]"
+                    value={inputText}
+                    onChange={(e) => store.setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        sendMessage()
+                      }
+                    }}
+                    placeholder={store.chatMode === 'build' ? '描述您想要的微应用功能...' : '描述您的需求，例如：查询变压器状态...'}
+                    rows={1}
+                    disabled={isThinking}
+                  />
+                  <button
+                    className="px-3.5 py-2 rounded-md text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={sendMessage}
+                    disabled={isThinking || !inputText.trim()}
+                  >
+                    发送
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ==================== Dedicated Mode ==================== */}
+          {selectedMicroApp && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Execution Info Card */}
+              <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                <div className="flex items-center justify-between text-sm font-semibold mb-3">
+                  <span className="flex items-center gap-2">
+                    执行信息
+                    {selectedMicroApp.app_type === 'scheduled' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-[#fff7e8] text-[#ff7d00] border border-[#ff7d00]/20">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        定时任务
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    className="px-3 py-1 rounded-md text-xs bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => executeMicroApp(selectedMicroApp.id, userInputValues)}
+                    disabled={store.executingApp === selectedMicroApp.id}
+                  >
+                    {store.executingApp === selectedMicroApp.id ? (
+                      <span className="inline-flex gap-1 items-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:0.1s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:0.2s]" />
+                      </span>
+                    ) : (
+                      '▶ 执行微应用'
+                    )}
+                  </button>
+                </div>
+                <div className={`flex mb-2.5 text-[13px] leading-relaxed ${selectedMicroApp.app_type === 'scheduled' ? 'bg-[#fff7e8] rounded-md px-3 py-2 -mx-1' : ''}`}>
+                  <div className="w-[70px] text-[#86909c] flex-shrink-0">{selectedMicroApp.app_type === 'scheduled' ? '执行频率' : '触发条件'}</div>
+                  <div className={`flex-1 ${selectedMicroApp.app_type === 'scheduled' ? 'text-[#ff7d00] font-medium' : 'text-[#1a1a1a]'}`}>{selectedMicroApp.trigger || '—'}</div>
+                </div>
+                <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                  <div className="w-[70px] text-[#86909c] flex-shrink-0">输入参数</div>
+                  <div className="flex-1 text-[#1a1a1a]">{selectedMicroApp.input || '—'}</div>
+                </div>
+                {selectedMicroApp.interfaces?.includes('grid-amap-device-query-by-name') && (
+                  <div className="flex mb-2.5 text-[13px] leading-relaxed items-center gap-2">
+                    <div className="w-[70px] text-[#86909c] flex-shrink-0">变电站名称</div>
+                    <input
+                      type="text"
+                      className="flex-1 text-[13px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff] transition-colors"
+                      placeholder="请输入变电站名称（如：江表变）"
+                      value={(userInputValues.psrName as string) || ''}
+                      onChange={(e) => setUserInputValues({ ...userInputValues, psrName: e.target.value })}
+                    />
+                  </div>
+                )}
+                <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                  <div className="w-[70px] text-[#86909c] flex-shrink-0">输出结果</div>
+                  <div className="flex-1 text-[#1a1a1a]">{selectedMicroApp.output || '—'}</div>
+                </div>
+                <div className="flex mb-2.5 text-[13px] leading-relaxed">
+                  <div className="w-[70px] text-[#86909c] flex-shrink-0">绑定接口</div>
+                  <div className="flex-1">
+                    {selectedMicroApp.interfaces.map((apiId) => (
+                      <span key={apiId} className="inline-block bg-[#e8f3ff] text-[#165dff] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
+                        {apiMap()[apiId]?.name || apiId}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {selectedMicroApp.skills && selectedMicroApp.skills.length > 0 && (
+                  <div className="flex text-[13px] leading-relaxed">
+                    <div className="w-[70px] text-[#86909c] flex-shrink-0">关联 Skill</div>
+                    <div className="flex-1">
+                      {selectedMicroApp.skills.map((sk) => (
+                        <span key={sk} className="inline-block bg-[#f5e8ff] text-[#722ed1] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
+                          {sk}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Execution History — only for scheduled micro-apps */}
+              {selectedMicroApp.app_type === 'scheduled' && (
+                <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                  <div
+                    className="flex items-center justify-between text-sm font-semibold mb-2 cursor-pointer select-none"
+                    onClick={() => setShowHistory(!showHistory)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff7d00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      执行历史
+                    </span>
+                    <span className="text-xs text-[#86909c]">{showHistory ? '收起' : '展开'}{executionHistory.length > 0 ? `（${executionHistory.length}）` : ''}</span>
+                  </div>
+                  {showHistory && (
+                    <div className="space-y-2">
+                      {executionHistory.length === 0 ? (
+                        <div className="text-xs text-[#86909c] py-2">暂无执行记录</div>
+                      ) : (
+                        executionHistory.map((h, idx) => (
+                          <div key={idx} className="text-[13px] bg-[#f8f9fa] rounded px-3 py-2 text-[#1a1a1a]">
+                            {h.summary}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Flow Chart */}
+              <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                <div className="text-sm font-semibold mb-3">接口调用逻辑</div>
+                <div className="bg-[#f8f9fa] rounded-md p-4">
+                  <FlowChart flow={selectedMicroApp.flow} apis={apiMap()} />
+                </div>
+              </div>
+
+              {/* Browser Simulator — strictly bound to web-browser-sim micro-app only */}
+              {selectedMicroApp.id === 'web-browser-sim' && (
+                <div className="mb-4">
+                  <BrowserSimulator initialUrl={browserUrl} height={480} />
+                </div>
+              )}
+
+              {/* Dedicated Chat Header */}
+              <div className="bg-white rounded-lg px-4 py-3.5 mb-3 border border-[#e5e6eb] border-l-4 border-l-[#00b42a] flex items-center justify-between flex-shrink-0" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg">⚙️</span>
+                  <div>
+                    <div className="text-sm font-semibold text-[#1a1a1a]">{selectedMicroApp.name} 专属助手</div>
+                    <div className="text-xs text-[#86909c]">
+                      {store.chatMode === 'build' ? '当前正在构建微应用，可描述需求进行调整' : '当前已进入该微应用，可询问数据或输入"执行"开始运行'}
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <button
@@ -1590,550 +2006,127 @@ export default function ChatWindow() {
                 </div>
               </div>
 
-              <div
-                className="flex-1 overflow-y-auto px-4 py-4 min-h-[200px]"
-                ref={messageScrollRef}
-                onScroll={() => {
-                  userScrolledUp.current = !isNearBottom()
-                }}
-                onClick={handleLinkClick}
-              >
-                {messages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-10 text-[#86909c]">
-                    <div className="text-5xl mb-3">⚙️</div>
-                    <div className="text-sm">
-                      我是 OpenCraft 智能助手
-                      <br />
-                      在下方输入需求，我会帮你调用微应用
-                    </div>
-                  </div>
-                )}
-                {messages.map((msg) => (
-                  <div key={msg.id} className={`flex gap-2.5 mb-4 ${msg.role === 'user' ? 'ml-auto flex-row-reverse max-w-[85%]' : 'max-w-[85%]'}`}>
-                    <div
-                      className={`w-[34px] h-[34px] rounded-full flex items-center justify-center text-base flex-shrink-0 ${
-                        msg.role === 'user' ? 'bg-[#165dff] text-white' : 'bg-[#f2f3f5]'
-                      }`}
-                    >
-                      {msg.role === 'user' ? '👤' : '🤖'}
-                    </div>
-                    <div>
-                      <div
-                        className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words ${
-                          msg.role === 'user'
-                            ? 'bg-[#165dff] text-white rounded-br-md'
-                            : 'bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md max-h-[520px] overflow-y-auto scrollbar-thin'
-                        }`}
-                        dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }}
-                      />
-                      <div className="text-[11px] text-[#86909c] mt-1 text-right">{formatTime(msg.timestamp)}</div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Inline Browser Simulator — appears as part of the assistant reply */}
-                {showBrowserSimulator && (
-                  <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                    <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
-                          <button
-                            className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
-                            onClick={() => store.setShowBrowserSimulator(false)}
-                          >
-                            收起
-                          </button>
-                        </div>
-                        <BrowserSimulator initialUrl={browserUrl} height={360} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {isThinking && (
-                  <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                    <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🤖</div>
-                    <div>
-                      <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                        <span className="inline-flex gap-1 items-center">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.1s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.2s]" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Quick tags */}
-              <div className="flex gap-1.5 px-4 py-2 flex-wrap border-t border-[#f2f3f5]">
-                {globalQuickTags().map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2.5 py-1 rounded bg-[#f2f3f5] text-[#4e5969] cursor-pointer border border-[#e5e6eb] hover:border-[#165dff] hover:text-[#165dff] hover:bg-[#e8f3ff] transition-colors"
-                    onClick={() => sendQuick(tag)}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              {/* Creation confirmation card */}
-              {pendingCreation && (
-                <div className="border border-[#165dff] rounded-lg mx-4 my-3 shadow-lg" style={{ boxShadow: '0 4px 12px rgba(22,93,255,0.1)' }}>
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e6eb] bg-[#e8f3ff] rounded-t-lg">
-                    <span className="text-sm font-semibold text-[#165dff]">🛠️ 确认创建微应用</span>
-                    <span className="text-lg text-[#86909c] cursor-pointer w-6 h-6 flex items-center justify-center rounded hover:bg-[#f2f3f5] hover:text-[#1a1a1a]" onClick={cancelCreateApp}>
-                      ×
-                    </span>
-                  </div>
-                  {/* Tabs */}
-                  <div className="flex border-b border-[#e5e6eb]">
-                    {[
-                      { key: 'basic', label: '基本信息' },
-                      { key: 'code', label: '代码预览' },
-                      { key: 'render', label: '渲染预览' },
-                    ].map((tab) => (
-                      <button
-                        key={tab.key}
-                        className={`flex-1 py-2 text-[13px] font-medium transition-colors ${
-                          previewTab === tab.key
-                            ? 'text-[#165dff] bg-white border-b-2 border-[#165dff]'
-                            : 'text-[#86909c] hover:text-[#4e5969] hover:bg-[#f7f8fa]'
-                        }`}
-                        onClick={() => setPreviewTab(tab.key as any)}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="px-4 py-3">
-                    {previewTab === 'basic' && (
-                      <>
-                        <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                          <div className="w-[70px] text-[#86909c] flex-shrink-0">应用名称</div>
-                          <input
-                            className="flex-1 px-2.5 py-1.5 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
-                            value={String(pendingCreation.name || '')}
-                            onChange={(e) => store.setPendingCreation({ ...pendingCreation, name: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                          <div className="w-[70px] text-[#86909c] flex-shrink-0">应用描述</div>
-                          <input
-                            className="flex-1 px-2.5 py-1.5 border border-[#e5e6eb] rounded-md text-[13px] outline-none focus:border-[#165dff]"
-                            value={String(pendingCreation.description || '')}
-                            onChange={(e) => store.setPendingCreation({ ...pendingCreation, description: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                          <div className="w-[70px] text-[#86909c] flex-shrink-0">包含接口</div>
-                          <div className="flex-1">
-                            {Array.isArray(pendingCreation.interfaces) &&
-                              (pendingCreation.interfaces as string[]).map((apiId: string) => (
-                                <span key={apiId} className="inline-block bg-[#e8f3ff] text-[#165dff] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
-                                  {apiMap()[apiId]?.name || apiId}
-                                </span>
-                              ))}
-                          </div>
-                        </div>
-                        {pendingCreation.code && (
-                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                            <div className="w-[70px] text-[#86909c] flex-shrink-0">执行代码</div>
-                            <div className="flex-1">
-                              <span className="inline-block bg-[#e8ffea] text-[#00b42a] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
-                                已生成可执行代码
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                        {pendingCreation.workflow && Array.isArray((pendingCreation.workflow as any).steps) && ((pendingCreation.workflow as any).steps as any[]).length > 0 && (
-                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                            <div className="w-[70px] text-[#86909c] flex-shrink-0">用户步骤</div>
-                            <div className="flex-1 flex flex-col gap-1.5">
-                              {((pendingCreation.workflow as any).steps as any[]).map((step: any) => (
-                                <div key={step.index} className="flex items-start gap-2 px-2 py-1.5 bg-[#f7f8fa] border border-[#e5e6eb] rounded-md text-[13px]">
-                                  <span className="w-5 h-5 flex items-center justify-center bg-[#86909c] text-white rounded-full text-[11px] font-semibold flex-shrink-0 mt-0.5">
-                                    {step.index}
-                                  </span>
-                                  <span className="flex-1">{String(step.description || '')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {pendingCreation.flow && (pendingCreation.flow as any).steps && Array.isArray((pendingCreation.flow as any).steps) ? (
-                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                            <div className="w-[70px] text-[#86909c] flex-shrink-0">
-                              调用流程 <span className="text-[#86909c] text-xs font-normal">（可删除步骤）</span>
-                            </div>
-                            <div className="flex-1 flex flex-col gap-1.5">
-                              {((pendingCreation.flow as any).steps as any[]).map((step, idx) => (
-                                <div key={idx} className="flex items-center gap-2 px-2 py-1.5 bg-[#f7f8fa] border border-[#e5e6eb] rounded-md text-[13px]">
-                                  <span className="w-5 h-5 flex items-center justify-center bg-[#165dff] text-white rounded-full text-[11px] font-semibold flex-shrink-0">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="flex-1">{step.label || step.apiId}</span>
-                                  <span
-                                    className="w-5 h-5 flex items-center justify-center text-[#86909c] cursor-pointer rounded hover:bg-[#ffece8] hover:text-[#f53f3f] text-base leading-none"
-                                    onClick={() => removeDraftStep(idx)}
-                                    title="删除此步骤"
-                                  >
-                                    ×
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                            <div className="w-[70px] text-[#86909c] flex-shrink-0">调用流程</div>
-                            <div className="flex-1 text-[#86909c]">暂无步骤，可从右侧接口列表添加</div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {previewTab === 'code' && (
-                      <div className="mt-1">
-                        {pendingCreation.code ? (
-                          <div className="code-block relative">
-                            <pre className="text-xs font-mono bg-[#f7f8fa] border border-[#e5e6eb] rounded-md p-3 overflow-x-auto max-h-[300px] overflow-y-auto">
-                              {String(pendingCreation.code || '')}
-                            </pre>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-[#86909c] text-center py-6">暂无代码，将使用 FlowNode 动态解释执行</div>
-                        )}
-                      </div>
-                    )}
-                    {previewTab === 'render' && (
-                      <div className="mt-1">
-                        {pendingCreation.render_config ? (
-                          <div className="code-block relative">
-                            <pre className="text-xs font-mono bg-[#f7f8fa] border border-[#e5e6eb] rounded-md p-3 overflow-x-auto max-h-[300px] overflow-y-auto">
-                              {JSON.stringify(pendingCreation.render_config, null, 2)}
-                            </pre>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-[#86909c] text-center py-6">暂无渲染配置，将使用默认 JSON 展示</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-end gap-2 px-4 py-2.5 border-t border-[#e5e6eb]">
-                    <button
-                      className="px-3 py-1.5 rounded-md text-[13px] bg-[#f2f3f5] text-[#1a1a1a] border border-[#e5e6eb] hover:bg-[#e5e6eb] transition-colors"
-                      onClick={cancelCreateApp}
-                    >
-                      取消
-                    </button>
-                    <button
-                      className="px-3 py-1.5 rounded-md text-[13px] bg-[#165dff] text-white hover:bg-[#114ec2] transition-colors"
-                      onClick={confirmCreateApp}
-                    >
-                      ✓ 确认创建
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Input */}
-              <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2 sticky bottom-0 bg-white z-50">
-                <textarea
-                  autoFocus
-                  className="chat-input flex-1 px-3.5 py-2.5 border border-[#e5e6eb] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff]"
-                  value={inputText}
-                  onChange={(e) => store.setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
-                    }
+              {/* Dedicated Chat */}
+              <div className="bg-white rounded-lg border border-[#e5e6eb] flex flex-col flex-1 min-h-0">
+                <div
+                  className="flex-1 overflow-y-auto px-4 py-4"
+                  ref={messageScrollRef}
+                  onScroll={() => {
+                    userScrolledUp.current = !isNearBottom()
                   }}
-                  placeholder={store.chatMode === 'build' ? '描述您想要的微应用功能...' : '描述您的需求，例如：查询变压器状态...'}
-                  rows={1}
-                  disabled={isThinking}
-                />
-                <button
-                  className="px-3.5 py-2 rounded-md text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  onClick={sendMessage}
-                  disabled={isThinking || !inputText.trim()}
+                  onClick={handleLinkClick}
                 >
-                  发送
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+                  {dedicatedMessages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 text-[#86909c]">
+                      <div className="text-5xl mb-3">⚙️</div>
+                      <div className="text-sm">
+                        {selectedMicroApp.name} 专属助手
+                        <br />
+                        在下方输入需求，我会围绕此微应用为您解答
+                      </div>
+                    </div>
+                  )}
+                  {dedicatedMessages.map((msg) => (
+                    <div key={msg.id} className={`flex gap-2.5 mb-4 ${msg.role === 'user' ? 'ml-auto flex-row-reverse max-w-[85%]' : 'max-w-[85%]'}`}>
+                      <div
+                        className={`w-[34px] h-[34px] rounded-full flex items-center justify-center text-base flex-shrink-0 ${
+                          msg.role === 'user' ? 'bg-[#165dff] text-white' : 'bg-[#f2f3f5]'
+                        }`}
+                      >
+                        {msg.role === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div>
+                        <div
+                          className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words ${
+                            msg.role === 'user'
+                              ? 'bg-[#165dff] text-white rounded-br-md'
+                              : 'bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md max-h-[520px] overflow-y-auto scrollbar-thin'
+                          }`}
+                          dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }}
+                        />
+                        <div className="text-[11px] text-[#86909c] mt-1 text-right">{formatTime(msg.timestamp)}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {isThinking && (
+                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
+                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🤖</div>
+                      <div>
+                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
+                          <span className="inline-flex gap-1 items-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.1s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.2s]" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-        {/* ==================== Dedicated Mode ==================== */}
-        {selectedMicroApp && (
-          <>
-            {/* Execution Info Card */}
-            <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-              <div className="flex items-center justify-between text-sm font-semibold mb-3">
-                <span className="flex items-center gap-2">
-                  执行信息
-                  {selectedMicroApp.app_type === 'scheduled' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-[#fff7e8] text-[#ff7d00] border border-[#ff7d00]/20">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      定时任务
-                    </span>
+                  {/* Inline Browser Simulator */}
+                  {showBrowserSimulator && (
+                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
+                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
+                            <button
+                              className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
+                              onClick={() => store.setShowBrowserSimulator(false)}
+                            >
+                              收起
+                            </button>
+                          </div>
+                          <BrowserSimulator initialUrl={browserUrl} height={360} />
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </span>
-                <button
-                  className="px-3 py-1 rounded-md text-xs bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  onClick={() => executeMicroApp(selectedMicroApp.id, userInputValues)}
-                  disabled={store.executingApp === selectedMicroApp.id}
-                >
-                  {store.executingApp === selectedMicroApp.id ? (
-                    <span className="inline-flex gap-1 items-center">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:0.1s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:0.2s]" />
-                    </span>
-                  ) : (
-                    '▶ 执行微应用'
-                  )}
-                </button>
-              </div>
-              <div className={`flex mb-2.5 text-[13px] leading-relaxed ${selectedMicroApp.app_type === 'scheduled' ? 'bg-[#fff7e8] rounded-md px-3 py-2 -mx-1' : ''}`}>
-                <div className="w-[70px] text-[#86909c] flex-shrink-0">{selectedMicroApp.app_type === 'scheduled' ? '执行频率' : '触发条件'}</div>
-                <div className={`flex-1 ${selectedMicroApp.app_type === 'scheduled' ? 'text-[#ff7d00] font-medium' : 'text-[#1a1a1a]'}`}>{selectedMicroApp.trigger || '—'}</div>
-              </div>
-              <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                <div className="w-[70px] text-[#86909c] flex-shrink-0">输入参数</div>
-                <div className="flex-1 text-[#1a1a1a]">{selectedMicroApp.input || '—'}</div>
-              </div>
-              {selectedMicroApp.interfaces?.includes('grid-amap-device-query-by-name') && (
-                <div className="flex mb-2.5 text-[13px] leading-relaxed items-center gap-2">
-                  <div className="w-[70px] text-[#86909c] flex-shrink-0">变电站名称</div>
-                  <input
-                    type="text"
-                    className="flex-1 text-[13px] border border-[#e5e6eb] rounded px-2 py-1 outline-none focus:border-[#165dff] transition-colors"
-                    placeholder="请输入变电站名称（如：江表变）"
-                    value={(userInputValues.psrName as string) || ''}
-                    onChange={(e) => setUserInputValues({ ...userInputValues, psrName: e.target.value })}
-                  />
                 </div>
-              )}
-              <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                <div className="w-[70px] text-[#86909c] flex-shrink-0">输出结果</div>
-                <div className="flex-1 text-[#1a1a1a]">{selectedMicroApp.output || '—'}</div>
-              </div>
-              <div className="flex mb-2.5 text-[13px] leading-relaxed">
-                <div className="w-[70px] text-[#86909c] flex-shrink-0">绑定接口</div>
-                <div className="flex-1">
-                  {selectedMicroApp.interfaces.map((apiId) => (
-                    <span key={apiId} className="inline-block bg-[#e8f3ff] text-[#165dff] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
-                      {apiMap()[apiId]?.name || apiId}
+
+                {/* Quick tags */}
+                <div className="flex gap-1.5 px-4 py-2 flex-wrap border-t border-[#f2f3f5] flex-shrink-0">
+                  {dedicatedQuickTags().map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2.5 py-1 rounded bg-[#f2f3f5] text-[#4e5969] cursor-pointer border border-[#e5e6eb] hover:border-[#165dff] hover:text-[#165dff] hover:bg-[#e8f3ff] transition-colors"
+                      onClick={() => sendQuick(tag)}
+                    >
+                      {tag}
                     </span>
                   ))}
                 </div>
-              </div>
-              {selectedMicroApp.skills && selectedMicroApp.skills.length > 0 && (
-                <div className="flex text-[13px] leading-relaxed">
-                  <div className="w-[70px] text-[#86909c] flex-shrink-0">关联 Skill</div>
-                  <div className="flex-1">
-                    {selectedMicroApp.skills.map((sk) => (
-                      <span key={sk} className="inline-block bg-[#f5e8ff] text-[#722ed1] px-2 py-0.5 rounded text-xs mr-1.5 mb-1">
-                        {sk}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {/* Execution History — only for scheduled micro-apps */}
-            {selectedMicroApp.app_type === 'scheduled' && (
-              <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                <div
-                  className="flex items-center justify-between text-sm font-semibold mb-2 cursor-pointer select-none"
-                  onClick={() => setShowHistory(!showHistory)}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff7d00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    执行历史
-                  </span>
-                  <span className="text-xs text-[#86909c]">{showHistory ? '收起' : '展开'}{executionHistory.length > 0 ? `（${executionHistory.length}）` : ''}</span>
-                </div>
-                {showHistory && (
-                  <div className="space-y-2">
-                    {executionHistory.length === 0 ? (
-                      <div className="text-xs text-[#86909c] py-2">暂无执行记录</div>
-                    ) : (
-                      executionHistory.map((h, idx) => (
-                        <div key={idx} className="text-[13px] bg-[#f8f9fa] rounded px-3 py-2 text-[#1a1a1a]">
-                          {h.summary}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Flow Chart */}
-            <div className="bg-white rounded-lg p-4 mb-4 border border-[#e5e6eb]" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-              <div className="text-sm font-semibold mb-3">接口调用逻辑</div>
-              <div className="bg-[#f8f9fa] rounded-md p-4">
-                <FlowChart flow={selectedMicroApp.flow} apis={apiMap()} />
-              </div>
-            </div>
-
-            {/* Browser Simulator — strictly bound to web-browser-sim micro-app only */}
-            {selectedMicroApp.id === 'web-browser-sim' && (
-              <div className="mb-4">
-                <BrowserSimulator initialUrl={browserUrl} height={480} />
-              </div>
-            )}
-
-            {/* Dedicated Chat Header */}
-            <div className="bg-white rounded-lg px-4 py-3.5 mb-3 border border-[#e5e6eb] border-l-4 border-l-[#00b42a] flex items-center justify-between" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-              <div className="flex items-center gap-2.5">
-                <span className="text-lg">⚙️</span>
-                <div>
-                  <div className="text-sm font-semibold text-[#1a1a1a]">{selectedMicroApp.name} 专属助手</div>
-                  <div className="text-xs text-[#86909c]">
-                    {store.chatMode === 'build' ? '当前正在构建微应用，可描述需求进行调整' : '当前已进入该微应用，可询问数据或输入"执行"开始运行'}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <button
-                  className="text-xs text-[#86909c] px-2 py-1 rounded cursor-pointer hover:text-[#f53f3f] hover:bg-[#fff2f0] border border-transparent hover:border-[#ffccc7] transition-colors"
-                  onClick={clearMessages}
-                >
-                  🗑️ 清空对话
-                </button>
-              </div>
-            </div>
-
-            {/* Dedicated Chat */}
-            <div className="bg-white rounded-lg border border-[#e5e6eb] flex flex-col">
-              <div
-                className="flex-1 overflow-y-auto px-4 py-4 min-h-[200px]"
-                ref={messageScrollRef}
-                onScroll={() => {
-                  userScrolledUp.current = !isNearBottom()
-                }}
-                onClick={handleLinkClick}
-              >
-                {dedicatedMessages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-10 text-[#86909c]">
-                    <div className="text-5xl mb-3">⚙️</div>
-                    <div className="text-sm">
-                      {selectedMicroApp.name} 专属助手
-                      <br />
-                      在下方输入需求，我会围绕此微应用为您解答
-                    </div>
-                  </div>
-                )}
-                {dedicatedMessages.map((msg) => (
-                  <div key={msg.id} className={`flex gap-2.5 mb-4 ${msg.role === 'user' ? 'ml-auto flex-row-reverse max-w-[85%]' : 'max-w-[85%]'}`}>
-                    <div
-                      className={`w-[34px] h-[34px] rounded-full flex items-center justify-center text-base flex-shrink-0 ${
-                        msg.role === 'user' ? 'bg-[#165dff] text-white' : 'bg-[#f2f3f5]'
-                      }`}
-                    >
-                      {msg.role === 'user' ? '👤' : '🤖'}
-                    </div>
-                    <div>
-                      <div
-                        className={`px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words ${
-                          msg.role === 'user'
-                            ? 'bg-[#165dff] text-white rounded-br-md'
-                            : 'bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md max-h-[520px] overflow-y-auto scrollbar-thin'
-                        }`}
-                        dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }}
-                      />
-                      <div className="text-[11px] text-[#86909c] mt-1 text-right">{formatTime(msg.timestamp)}</div>
-                    </div>
-                  </div>
-                ))}
-                {isThinking && (
-                  <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                    <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🤖</div>
-                    <div>
-                      <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                        <span className="inline-flex gap-1 items-center">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.1s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#86909c] animate-bounce [animation-delay:0.2s]" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Inline Browser Simulator */}
-                {showBrowserSimulator && (
-                  <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                    <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
-                          <button
-                            className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
-                            onClick={() => store.setShowBrowserSimulator(false)}
-                          >
-                            收起
-                          </button>
-                        </div>
-                        <BrowserSimulator initialUrl={browserUrl} height={360} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Quick tags */}
-              <div className="flex gap-1.5 px-4 py-2 flex-wrap border-t border-[#f2f3f5]">
-                {dedicatedQuickTags().map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2.5 py-1 rounded bg-[#f2f3f5] text-[#4e5969] cursor-pointer border border-[#e5e6eb] hover:border-[#165dff] hover:text-[#165dff] hover:bg-[#e8f3ff] transition-colors"
-                    onClick={() => sendQuick(tag)}
+                {/* Input */}
+                <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2 flex-shrink-0">
+                  <textarea
+                    autoFocus
+                    className="chat-input flex-1 px-3.5 py-2.5 border border-[#e5e6eb] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff]"
+                    value={inputText}
+                    onChange={(e) => store.setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        sendMessage()
+                      }
+                    }}
+                    placeholder={`与 ${selectedMicroApp.name} 对话，或输入"执行"开始运行...`}
+                    rows={2}
+                    disabled={isThinking}
+                  />
+                  <button
+                    className="px-3.5 py-2 rounded-md text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={sendMessage}
+                    disabled={isThinking || !inputText.trim()}
                   >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              {/* Input */}
-              <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2">
-                <textarea
-                  autoFocus
-                  className="chat-input flex-1 px-3.5 py-2.5 border border-[#e5e6eb] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff]"
-                  value={inputText}
-                  onChange={(e) => store.setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendMessage()
-                    }
-                  }}
-                  placeholder={`与 ${selectedMicroApp.name} 对话，或输入"执行"开始运行...`}
-                  rows={2}
-                  disabled={isThinking}
-                />
-                <button
-                  className="px-3.5 py-2 rounded-md text-sm bg-[#165dff] text-white hover:bg-[#114ec2] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  onClick={sendMessage}
-                  disabled={isThinking || !inputText.trim()}
-                >
-                  发送
-                </button>
+                    发送
+                  </button>
+                </div>
               </div>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </>
   )

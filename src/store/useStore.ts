@@ -154,7 +154,7 @@ export const useStore = create<AppState>((set) => ({
   // 页面 UI 状态
   rightPanelView: 'digital_twin', // 右侧面板当前展示视图
   rightPanelCollapsed: false, // 右侧面板是否折叠
-  sidebarCollapsed: false, // 左侧侧边栏是否折叠
+  sidebarCollapsed: true, // 左侧侧边栏是否折叠
   showJsonEditor: false, // 是否显示 JSON 编辑器
   jsonInput: '', // JSON 编辑器输入内容
   pendingCreation: null, // 待确认创建的临时数据

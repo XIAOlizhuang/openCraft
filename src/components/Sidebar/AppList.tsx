@@ -503,12 +503,12 @@ export default function AppList() {
         <span>
           收藏夹 {myMicroApps.length > 0 ? '(' + myMicroApps.length + ')' : ''}
         </span>
-        {/* <button
+        <button
           className="px-3 py-1.5 rounded-md text-[13px] bg-[#165dff] text-white hover:bg-[#114ec2] transition-colors"
           onClick={startCreateApp}
         >
-          + 新建
-        </button> */}
+          新建微应用
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {loadingMyApps ? (
