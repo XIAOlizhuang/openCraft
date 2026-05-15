@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
+  base:'/opencraft/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -12,7 +13,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      '/opencraft_app/api': {
         target: 'http://127.0.0.1:8082',
         changeOrigin: true,
       },

@@ -4,8 +4,8 @@ import { useStore } from '@/store/useStore'
 // ==============================================
 // 这里就是你要的【动态前缀】，想改随时改这一行！
 // ==============================================
-const API_PREFIX = ''; // 为空 → /api
-// const API_PREFIX = '/opencraft_app'; // 开启 → /opencraft_app/api
+// const API_PREFIX = ''; // 为空 → /api
+export const API_PREFIX = '/opencraft_app'; // 开启 → /opencraft_app/api
 
 // 创建 axios 实例
 const api = axios.create({

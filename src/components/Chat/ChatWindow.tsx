@@ -5,6 +5,7 @@ import FlowChart from '@/components/Common/FlowChart'
 import BrowserSimulator from '@/components/Common/BrowserSimulator'
 import type { ChatMessage } from '@/types'
 import { Select,Tooltip,Modal } from 'antd'
+import {API_PREFIX} from '@/services/api'
 const { Option } = Select;
 const accountOptions = [
   { key: 'P00001100', label: 'P00001100' },
@@ -18,6 +19,10 @@ const accountOptions = [
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function removeThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '')
 }
 
 function renderInline(html: string): string {
@@ -103,8 +108,112 @@ function renderMarkdownBlock(block: string): string {
     return '<hr>'
   }
 
+  // Check if paragraph contains embedded table
+  const hasTableInParagraph = (text: string): boolean => {
+    const lines = text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('|') && i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim()
+        if (/^[\|\-:-\s]+$/.test(nextLine)) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
+  const renderTableFromLines = (lines: string[]): string => {
+    if (lines.length < 2) return ''
+    const headers = lines[0]
+      .split('|')
+      .filter((c) => c.trim() !== '')
+      .map((c) => `<th>${renderInline(escapeHtml(c.trim()))}</th>`)
+      .join('')
+    const rows = lines
+      .slice(2)
+      .map((row) => {
+        const cells = row
+          .split('|')
+          .filter((c) => c.trim() !== '')
+          .map((c) => `<td>${renderInline(escapeHtml(c.trim()))}</td>`)
+          .join('')
+        return `<tr>${cells}</tr>`
+      })
+      .join('')
+    return `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`
+  }
+
+  if (hasTableInParagraph(trimmed)) {
+    const lines = trimmed.split('\n')
+    const parts: string[] = []
+    let currentPart: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.includes('|') && i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim()
+        if (/^[\|\-:-\s]+$/.test(nextLine)) {
+          if (currentPart.length > 0) {
+            parts.push(`<p>${renderInline(escapeHtml(currentPart.join('\n').trim()).replace(/\n/g, '<br>'))}</p>`)
+            currentPart = []
+          }
+          const tableLines = [line, lines[i + 1]]
+          i += 2
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            tableLines.push(lines[i])
+            i++
+          }
+          i--
+          parts.push(renderTableFromLines(tableLines))
+          continue
+        }
+      }
+      currentPart.push(line)
+    }
+    if (currentPart.length > 0) {
+      parts.push(`<p>${renderInline(escapeHtml(currentPart.join('\n').trim()).replace(/\n/g, '<br>'))}</p>`)
+    }
+    return parts.join('')
+  }
+
   // Normal paragraph
   return `<p>${renderInline(escapeHtml(trimmed).replace(/\n/g, '<br>'))}</p>`
+}
+
+function isTableBlock(lines: string[], startIdx: number): boolean {
+  if (startIdx >= lines.length) return false
+  const line = lines[startIdx].trim()
+  if (!line.includes('|')) return false
+  if (startIdx + 1 >= lines.length) return false
+  const nextLine = lines[startIdx + 1].trim()
+  const separatorPattern = /^[\|\-:-\s]+$/
+  if (!separatorPattern.test(nextLine)) return false
+  return true
+}
+
+function extractTablesFromText(text: string): string {
+  const lines = text.split('\n')
+  const result: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i].trim()
+    if (line.includes('|') && i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim()
+      const separatorPattern = /^[\|\-:-\s]+$/
+      if (separatorPattern.test(nextLine)) {
+        let tableText = lines[i] + '\n' + lines[i + 1] + '\n'
+        i += 2
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableText += lines[i] + '\n'
+          i++
+        }
+        result.push(tableText)
+        continue
+      }
+    }
+    result.push(lines[i])
+    i++
+  }
+  return result.join('\n')
 }
 
 function renderMarkdownLines(text: string): string {
@@ -143,6 +252,12 @@ function renderMarkdownLines(text: string): string {
       blocks.push(
         `<div class="code-wrapper">${headerHtml}<div class="code-block relative"><pre>${escapeHtml(formatted)}</pre></div></div>`
       )
+      continue
+    }
+
+    if (isTableBlock(lines, i) && currentBlock.trim()) {
+      blocks.push(renderMarkdownBlock(currentBlock))
+      currentBlock = line + '\n'
       continue
     }
 
@@ -215,6 +330,11 @@ function parseDraftUpdateMarker(content: string): Record<string, unknown> | null
 function stripDraftUpdateMarker(content: string): string {
   if (!content) return ''
   return content.replace(/<!--DRAFT_UPDATE:[\s\S]*?-->/, '').trim()
+}
+
+function stripHtmlComments(content: string): string {
+  if (!content) return ''
+  return content.replace(/<!--[\s\S]*?-->/g, '').trim()
 }
 
 function formatTime(ts: string): string {
@@ -693,7 +813,7 @@ export default function ChatWindow() {
   const account = currentAccount
   
   // 拼接请求地址
-  let url = '/api/chat/stream?message=' + encodeURIComponent(text)
+  let url = `${API_PREFIX}/api/chat/stream?message=` + encodeURIComponent(text)
   if (appId) url += '&appId=' + encodeURIComponent(appId)
   url += '&mode=' + encodeURIComponent(chatMode)
   url += '&token=' + encodeURIComponent(account)
@@ -752,6 +872,7 @@ export default function ChatWindow() {
 
       if (data.type === 'delta') {
         assistantContent += data.content
+        assistantContent = removeThinkTags(stripHtmlComments(assistantContent))
         if (!assistantMsgId) {
           assistantMsgId = 'msg-' + Date.now()
           const msg: ChatMessage = {
@@ -774,7 +895,7 @@ export default function ChatWindow() {
       } else if (data.type === 'done') {
         const msgs = getCurrentMessages()
         const msg = msgs.find((m) => m.id === assistantMsgId)
-        const cleanContent = stripDraftUpdateMarker(stripConfirmMarker(stripAskConfirmMarker(data.content)))
+        const cleanContent = removeThinkTags(stripHtmlComments(stripDraftUpdateMarker(stripConfirmMarker(stripAskConfirmMarker(data.content)))))
         if (msg) {
           const updated = msgs.map((m) =>
             m.id === assistantMsgId ? { ...m, content: cleanContent, _streaming: false } : m
@@ -1720,7 +1841,7 @@ export default function ChatWindow() {
               )}
 
               {/* Input */}
-              <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2">
+              <div className="px-4 py-3 border-t border-[#e5e6eb] flex gap-2 sticky bottom-0 bg-white z-50">
                 <textarea
                   autoFocus
                   className="chat-input flex-1 px-3.5 py-2.5 border border-[#e5e6eb] rounded-lg text-sm outline-none resize-none min-h-[44px] max-h-[120px] leading-relaxed focus:border-[#165dff]"
