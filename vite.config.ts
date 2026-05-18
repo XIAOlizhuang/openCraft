@@ -14,11 +14,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/opencraft_app/api': {
-        target: 'http://127.0.0.1:8082',
+        target: 'http://172.40.225.172',
         changeOrigin: true,
       },
       '/static': {
-        target: 'http://127.0.0.1:8082',
+        target: 'http://172.40.225.172',
         changeOrigin: true,
       },
     },

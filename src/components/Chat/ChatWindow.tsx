@@ -372,6 +372,7 @@ export default function ChatWindow() {
     askedCreation,
     showBrowserSimulator,
     browserUrl,
+    showBrowserModal,
   } = store
 
   const currentAccount = useStore((state) => state.currentAccount)
@@ -568,7 +569,7 @@ export default function ChatWindow() {
         // ignore
       }
       try {
-        await fetch('/api/chat/history', { method: 'DELETE' });
+        await fetch(`${API_PREFIX}/api/chat/history`, { method: 'DELETE' });
       } catch {
         // ignore
       }
@@ -588,40 +589,149 @@ export default function ChatWindow() {
     }
   }
 
-  function extractByPath(data: any, path: string): any {
-    if (!path || !data) return undefined
-    const keys = path.split('.')
-    let current = data
-    for (const key of keys) {
-      if (current === null || current === undefined) return undefined
-      if (Array.isArray(current) && /^\d+$/.test(key)) {
-        current = current[parseInt(key)]
-      } else {
-        current = current[key]
-      }
-    }
-    return current
+  function tableCell(value: any): string {
+    if (value === null || value === undefined || value === '') return '-'
+    const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+    return text.replace(/\n/g, ' ').replace(/\|/g, '\\|')
   }
 
-  function buildExecutionReport(app: any, results: any, apiMap: Record<string, { name: string; method: string }>): string {
-    // Code-based micro-app: results is an object with rich data
-    if (app?.code && results && typeof results === 'object' && !Array.isArray(results)) {
-      let report = `微应用 **${app.name}** 执行完成。\n\n`
+  function extractRecords(data: any): any[] {
+    if (Array.isArray(data)) {
+      const nested = data.flatMap((item) => Array.isArray(item?.psrList) ? item.psrList : [])
+      return nested.length > 0 ? nested : data
+    }
+    if (!data || typeof data !== 'object') return []
+    // Grid PSRCenter: result.{psrType}.records[].resource holds the flat fields
+    const result = data.result
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      for (const key of Object.keys(result)) {
+        const val = result[key]
+        if (val && typeof val === 'object' && !Array.isArray(val) && Array.isArray(val.records)) {
+          const resources = val.records
+            .map((rec: any) => rec?.resource || rec)
+            .filter((r: any) => r && typeof r === 'object')
+          if (resources.length > 0) return resources
+        }
+      }
+    }
+    const resultList = Array.isArray(data.result) ? data.result : []
+    const nestedPsrList = resultList.flatMap((item: any) => Array.isArray(item?.psrList) ? item.psrList : [])
+    const candidates = [
+      data.records,
+      data.items,
+      data.data,
+      nestedPsrList.length > 0 ? nestedPsrList : undefined,
+      resultList.length > 0 ? resultList : undefined,
+      data.result?.records,
+      data.result?.data,
+      data.result?.data?.records,
+      data.stations,
+      data.defects,
+      data.devices,
+      data.lines,
+      data.transformers,
+    ]
+    for (const value of candidates) {
+      if (Array.isArray(value)) return value
+    }
+    return []
+  }
 
-      if (results.stationName !== undefined) {
-        report += `**查询站点**：${results.stationName}\n\n`
+  function recordCount(data: any): number | undefined {
+    if (Array.isArray(data)) return extractRecords(data).length
+    if (!data || typeof data !== 'object') return undefined
+    const records = extractRecords(data)
+    if (records.length > 0) return records.length
+    // Grid PSRCenter: result.{psrType}.total
+    if (data.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      for (const key of Object.keys(data.result)) {
+        const val = data.result[key]
+        if (val && typeof val === 'object' && !Array.isArray(val) && val.total !== undefined) {
+          return val.total
+        }
       }
-      if (results.totalDevices !== undefined) {
-        report += `**设备数量**：${results.totalDevices}\n\n`
+    }
+    if (Array.isArray(data.result?.records)) return data.result.records.length
+    if (Array.isArray(data.result?.data?.records)) return data.result.data.records.length
+    if (Array.isArray(data.result)) return 0
+    const explicit = data.total ?? data.count ?? data.totalCount ?? data.result?.total ?? data.result?.count ?? data.result?.totalCount
+    if (explicit !== undefined) return explicit
+    if (data.status !== undefined || data.reply?.code !== undefined) return 0
+    return undefined
+  }
+
+  function recordValue(item: any, key: string): any {
+    if (!item || typeof item !== 'object') return undefined
+    if (key === 'psrId') return item.psrId || item.psrID || item.resource?.psrId || item.resource?.psrID || item.id || item.astId
+    if (item[key] !== undefined) return item[key]
+    if (item.resource && typeof item.resource === 'object') return item.resource[key]
+    return undefined
+  }
+
+  function appendRecordsTable(records: any[], maxRows = 8): string {
+    if (!Array.isArray(records) || records.length === 0) return ''
+    const preferred = ['name', 'psrId', 'dispatchName', 'voltageLevel#Name', 'psrState#Name', 'transformerQuantity', 'stationCapacity', 'address',
+      'psrName', 'containerName', 'voltageLevel', 'maintOrg', 'maintGroup', 'equipMaintainerName', 'equipMaintcrewName', 'defectNatureCode', 'defectStatus', 'defectContent']
+    const keys: string[] = []
+    const pushKey = (key: string) => {
+      if (!keys.includes(key)) keys.push(key)
+    }
+    preferred.forEach((key) => {
+      if (records.some((item) => recordValue(item, key) !== undefined && recordValue(item, key) !== null && recordValue(item, key) !== '')) {
+        pushKey(key)
       }
-      if (Array.isArray(results.devices) && results.devices.length > 0) {
-        const keys = Object.keys(results.devices[0]).filter((k) => k !== 'detailUrl')
-        report += '| ' + keys.join(' | ') + ' |\n'
-        report += '| ' + keys.map(() => '---').join(' | ') + ' |\n'
-        results.devices.forEach((d: any) => {
-          report += '| ' + keys.map((k) => String(d[k] ?? '-')).join(' | ') + ' |\n'
+    })
+    records.forEach((item) => {
+      if (item && typeof item === 'object') {
+        Object.keys(item).forEach((key) => {
+          if (!keys.includes(key) && keys.length < 9) pushKey(key)
         })
-        report += '\n'
+      }
+    })
+    if (keys.length === 0) return ''
+    let table = '| ' + keys.join(' | ') + ' |\n'
+    table += '| ' + keys.map(() => '---').join(' | ') + ' |\n'
+    records.slice(0, maxRows).forEach((item: any) => {
+      table += '| ' + keys.map((key) => {
+        if (key === 'psrId') {
+          const psrId = recordValue(item, key)
+          if (psrId) {
+            return `[${psrId}](http://172.29.141.225:3000/?psrld=${psrId}&psrType=zf01)`
+          }
+        }
+        return tableCell(recordValue(item, key))
+      }).join(' | ') + ' |\n'
+    })
+    if (records.length > maxRows) {
+      table += `| *…还有 ${records.length - maxRows} 条记录* |${' |'.repeat(keys.length - 1)}\n`
+    }
+    return table + '\n'
+  }
+
+  function buildExecutionReport(app: any, execution: any, apiMap: Record<string, { name: string; method: string }>): string {
+    const results = execution?.results ?? execution
+    const apiTrace = Array.isArray(execution?.api_trace) ? execution.api_trace : []
+    const hasFailure = apiTrace.some((item: any) => item.status === 'failed' || item.error)
+    const mockUsed = execution?.mock_execution || apiTrace.some((item: any) => item.mock)
+    let report = `微应用 **${app?.name || ''}** ${hasFailure ? '执行存在异常' : '执行完成'}。\n\n`
+    if (mockUsed) {
+      report += '> 本次存在模拟数据回退，部分接口未能真实访问。\n\n'
+    }
+
+    // Only show real data records, not internal orchestration details
+    if (app?.code && results && typeof results === 'object' && !Array.isArray(results)) {
+      const objectRecords = extractRecords(results)
+      const count = recordCount(results)
+      if (results.stationName !== undefined) report += `**查询站点**：${results.stationName}\n\n`
+      if (results.totalDevices !== undefined) report += `**设备数量**：${results.totalDevices}\n\n`
+      if (count !== undefined && count > 0) {
+        report += `共查询到 ${count} 条记录。\n\n`
+        report += appendRecordsTable(objectRecords)
+      } else if (objectRecords.length > 0) {
+        report += `共查询到 ${objectRecords.length} 条记录。\n\n`
+        report += appendRecordsTable(objectRecords)
+      } else if (count === 0) {
+        report += '未查询到数据。\n\n'
       }
       if (Array.isArray(results.links) && results.links.length > 0) {
         report += '**详情链接**：\n\n'
@@ -629,92 +739,68 @@ export default function ChatWindow() {
           report += `- [${link.name || '查看详情'}](${link.url})\n`
         })
       }
+      if (count === undefined && objectRecords.length === 0) {
+        try {
+          report += '```json\n' + JSON.stringify(results, null, 2).slice(0, 4000) + '\n```\n\n'
+        } catch { /* skip */ }
+      }
       return report
     }
 
-    if (!app || !Array.isArray(results) || !app.flow?.steps) {
-      const count = results?.count ?? (Array.isArray(results?.items) ? results.items.length : Array.isArray(results?.results) ? results.results.length : undefined)
-      if (count !== undefined) return `微应用 **${app?.name || ''}** 执行完成，共查询到 ${count} 条记录。`
-      return `微应用 **${app?.name || ''}** 执行完成。`
+    if (Array.isArray(results)) {
+      const flowSteps = (app?.flow as any)?.steps || []
+      results.forEach((result: any, idx: number) => {
+        const step = flowSteps[idx] || {}
+        const trace = apiTrace[idx] || {}
+        const apiId = step.apiId || trace.api_id
+        const api = apiMap[apiId]
+        const stepName = step.label || trace.name || api?.name || apiId || `步骤 ${idx + 1}`
+        const records = extractRecords(result)
+        const count = recordCount(result)
+        report += `### ${stepName}\n\n`
+        if (hasFailure && trace.status === 'failed') {
+          report += `> 接口调用失败${trace.error ? '：' + trace.error : ''}\n\n`
+        }
+        if (count !== undefined && count > 0) {
+          report += `共查询到 ${count} 条记录。\n\n`
+          report += appendRecordsTable(records)
+        } else if (count === 0) {
+          report += '未查询到数据。\n\n'
+        } else {
+          // No recognizable record structure — show raw JSON
+          if (result && typeof result === 'object' && !Array.isArray(result)) {
+            const status = result.status ?? result.reply?.code
+            const msg = result.message ?? result.reply?.msg ?? result.errors
+            if (status !== undefined) report += `状态：${status}\n\n`
+            if (msg) report += `消息：${msg}\n\n`
+            // Try to show any meaningful data fields
+            const dataFields = Object.entries(result).filter(([k]) => !['status', 'message', 'errors', 'reply'].includes(k))
+            if (dataFields.length > 0) {
+              try {
+                report += '```json\n' + JSON.stringify(result, null, 2).slice(0, 4000) + '\n```\n\n'
+              } catch { /* skip */ }
+            }
+          }
+        }
+        report += '---\n\n'
+      })
+      return report
     }
 
-    const flowSteps = (app.flow as any).steps || []
-    let report = `微应用 **${app.name}** 执行完成，共 ${results.length} 个步骤。\n\n---\n\n`
-
-    flowSteps.forEach((step: any, idx: number) => {
-      const result = results[idx]
-      const api = apiMap[step.apiId]
-      const stepNum = idx + 1
-
-      report += `### 步骤 ${stepNum}：${step.label || step.apiId}\n`
-      if (api) {
-        report += `**接口**：${api.name}（${api.method}）\n\n`
+    const count = recordCount(results)
+    if (count !== undefined && count > 0) {
+      report += `共查询到 ${count} 条记录。\n\n`
+      report += appendRecordsTable(extractRecords(results))
+    } else if (count === 0) {
+      report += '未查询到数据。\n\n'
+    } else {
+      // Fallback: show raw JSON for unrecognizable structures
+      if (results && typeof results === 'object') {
+        try {
+          report += '```json\n' + JSON.stringify(results, null, 2).slice(0, 4000) + '\n```\n\n'
+        } catch { /* skip */ }
       }
-
-      // 参数绑定
-      const params = step.params || []
-      if (params.length > 0) {
-        report += `**参数绑定**：\n\n| 参数名 | 来源 | 提取路径/值 | 实际值 |\n|---|---|---|---|\n`
-        params.forEach((p: any) => {
-          let sourceText = '固定值'
-          let pathText = p.value || '-'
-          let actualValue = p.value || '-'
-          if (p.source === 'prev_step') {
-            sourceText = '上一步输出'
-            pathText = p.mapping || p.value
-            const prevResult = results[parseInt(p.value)]
-            if (prevResult && p.mapping) {
-              actualValue = String(extractByPath(prevResult, p.mapping) ?? '-')
-            }
-          } else if (p.source === 'user_input') {
-            sourceText = '用户输入'
-          }
-          report += `| ${p.name} | ${sourceText} | ${pathText} | ${actualValue} |\n`
-        })
-        report += '\n'
-      }
-
-      // 返回结果摘要
-      if (result && typeof result === 'object') {
-        const data = result.data ?? result
-        report += `**返回结果摘要**：\n\n`
-
-        const stats: string[] = []
-        if (data.count !== undefined) stats.push(`- 记录总数：${data.count}`)
-        if (data.queryTime !== undefined) stats.push(`- 查询时间：${data.queryTime}`)
-        if (data.status !== undefined) stats.push(`- 状态：${data.status}`)
-        if (data.name !== undefined) stats.push(`- 名称：${data.name}`)
-        if (data.voltage !== undefined) stats.push(`- 电压等级：${data.voltage}`)
-        if (data.loadRate !== undefined) stats.push(`- 负载率：${data.loadRate}%`)
-        if (data.temperature !== undefined) stats.push(`- 绕组温度：${data.temperature}°C`)
-        if (data.oilTemp !== undefined) stats.push(`- 油温：${data.oilTemp}°C`)
-        if (data.capacity !== undefined) stats.push(`- 容量：${data.capacity}`)
-        if (data.lastInspection !== undefined) stats.push(`- 上次巡检：${data.lastInspection}`)
-        if (data.nextMaintenance !== undefined) stats.push(`- 下次检修：${data.nextMaintenance}`)
-
-        if (stats.length > 0) {
-          report += stats.join('\n') + '\n\n'
-        }
-
-        // 表格展示数组数据
-        const items = data.items
-        if (Array.isArray(items) && items.length > 0) {
-          const keys = Object.keys(items[0])
-          report += '| ' + keys.join(' | ') + ' |\n'
-          report += '| ' + keys.map(() => '---').join(' | ') + ' |\n'
-          items.slice(0, 5).forEach((item: any) => {
-            report += '| ' + keys.map((k) => String(item[k] ?? '-')).join(' | ') + ' |\n'
-          })
-          if (items.length > 5) {
-            report += `| *…还有 ${items.length - 5} 条记录* |${' |'.repeat(keys.length - 1)}\n`
-          }
-          report += '\n'
-        }
-      }
-
-      report += '---\n\n'
-    })
-
+    }
     return report
   }
 
@@ -725,9 +811,7 @@ export default function ChatWindow() {
       const data = res.data
       const allApps = [...microApps, ...useStore.getState().myMicroApps]
       const app = allApps.find((a) => a.id === appId)
-      const results = data.results
-
-      const msg = buildExecutionReport(app, results, apiMap())
+      const msg = buildExecutionReport(app, data, apiMap())
 
       const target = selectedMicroApp ? store.dedicatedMessages : store.messages
       const setTarget = selectedMicroApp ? store.setDedicatedMessages : store.setMessages
@@ -757,7 +841,8 @@ export default function ChatWindow() {
       if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
         e.preventDefault()
         store.setBrowserUrl(href)
-        store.setShowBrowserSimulator(true)
+        store.setShowBrowserSimulator(false)
+        store.setShowBrowserModal(true)
       }
     }
   }, [])
@@ -872,13 +957,13 @@ export default function ChatWindow() {
 
       if (data.type === 'delta') {
         assistantContent += data.content
-        assistantContent = removeThinkTags(stripHtmlComments(assistantContent))
+        const visibleContent = removeThinkTags(stripHtmlComments(assistantContent))
         if (!assistantMsgId) {
           assistantMsgId = 'msg-' + Date.now()
           const msg: ChatMessage = {
             id: assistantMsgId,
             role: 'assistant',
-            content: assistantContent,
+            content: visibleContent,
             timestamp: new Date().toISOString(),
             _streaming: true,
           }
@@ -887,7 +972,7 @@ export default function ChatWindow() {
           const msgs = getCurrentMessages()
           const msg = msgs.find((m) => m.id === assistantMsgId)
           if (msg) {
-            const updated = msgs.map((m) => (m.id === assistantMsgId ? { ...m, content: assistantContent } : m))
+            const updated = msgs.map((m) => (m.id === assistantMsgId ? { ...m, content: visibleContent } : m))
             setTarget(updated)
           }
         }
@@ -1557,14 +1642,14 @@ export default function ChatWindow() {
           {!selectedMicroApp && (
             <>
               {/* Welcome Card */}
-              <div className="rounded-xl p-7 mb-4 text-white" style={{ background: 'linear-gradient(135deg, #165dff 0%, #114ec2 100%)' }}>
+              {/* <div className="rounded-xl p-7 mb-4 text-white" style={{ background: 'linear-gradient(135deg, #165dff 0%, #114ec2 100%)' }}>
                 <div className="text-xl font-semibold mb-2">欢迎使用数字孪生智能助手</div>
                 <div className="text-sm opacity-90 leading-relaxed mb-4">
                   当前场景为 <strong>{currentDomain || '数字孪生'}</strong>，共有 {microApps.length} 个微应用、{apis.length} 个 API 接口。
                   <br />
                   您可以向我提问任何问题，我会自动识别并调用对应的微应用。
                 </div>
-              </div>
+              </div> */}
 
               {/* Global Chat */}
               <div className="bg-white rounded-lg border border-[#e5e6eb] flex flex-col flex-1 min-h-0">
@@ -1624,26 +1709,6 @@ export default function ChatWindow() {
                     </div>
                   ))}
 
-                  {/* Inline Browser Simulator — appears as part of the assistant reply */}
-                  {showBrowserSimulator && (
-                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
-                            <button
-                              className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
-                              onClick={() => store.setShowBrowserSimulator(false)}
-                            >
-                              收起
-                            </button>
-                          </div>
-                          <BrowserSimulator initialUrl={browserUrl} height={360} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {isThinking && (
                     <div className="flex gap-2.5 mb-4 max-w-[85%]">
@@ -2063,26 +2128,6 @@ export default function ChatWindow() {
                     </div>
                   )}
 
-                  {/* Inline Browser Simulator */}
-                  {showBrowserSimulator && (
-                    <div className="flex gap-2.5 mb-4 max-w-[85%]">
-                      <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-base bg-[#f2f3f5] flex-shrink-0">🌐</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="px-3.5 py-2.5 rounded-xl text-sm leading-relaxed break-words bg-[#f2f3f5] text-[#1a1a1a] rounded-bl-md">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-[#86909c]">网页浏览器模拟器</span>
-                            <button
-                              className="text-[11px] text-[#86909c] hover:text-[#f53f3f] px-1.5 py-0.5 rounded hover:bg-[#fff2f0] transition-colors"
-                              onClick={() => store.setShowBrowserSimulator(false)}
-                            >
-                              收起
-                            </button>
-                          </div>
-                          <BrowserSimulator initialUrl={browserUrl} height={360} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Quick tags */}
@@ -2128,6 +2173,20 @@ export default function ChatWindow() {
           )}
         </div>
       )}
+      <Modal
+        title="网页浏览器模拟器"
+        open={showBrowserModal}
+        onCancel={() => store.setShowBrowserModal(false)}
+        footer={null}
+        width={1100}
+        style={{ top: 20 }}
+        bodyStyle={{ padding: 0 }}
+        destroyOnClose
+      >
+        <div className="p-4">
+          <BrowserSimulator initialUrl={browserUrl} height={640} />
+        </div>
+      </Modal>
     </>
   )
 }

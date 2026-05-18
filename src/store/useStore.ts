@@ -65,6 +65,7 @@ interface AppState {
   // 浏览器模拟器
   showBrowserSimulator: boolean
   browserUrl: string
+  showBrowserModal: boolean
 
   // 当前账号
   currentAccount: string
@@ -118,6 +119,7 @@ interface AppState {
   setAskedCreation: (draft: Record<string, unknown> | null) => void
   setShowBrowserSimulator: (v: boolean) => void
   setBrowserUrl: (url: string) => void
+  setShowBrowserModal: (v: boolean) => void
   setCurrentAccount: (account: string) => void
 }
 
@@ -180,6 +182,7 @@ export const useStore = create<AppState>((set) => ({
   // 浏览器模拟器相关状态
   showBrowserSimulator: false,
   browserUrl: 'https://www.sgcc.com.cn',
+  showBrowserModal: false,
 
   // 当前账号
   currentAccount: 'P00001100',
@@ -245,5 +248,6 @@ export const useStore = create<AppState>((set) => ({
   setAskedCreation: (draft) => set({ askedCreation: draft }),
   setShowBrowserSimulator: (v) => set({ showBrowserSimulator: v }),
   setBrowserUrl: (url) => set({ browserUrl: url }),
+  setShowBrowserModal: (v) => set({ showBrowserModal: v }),
   setCurrentAccount: (account) => set({ currentAccount: account }),
 }))
