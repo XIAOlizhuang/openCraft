@@ -4,9 +4,10 @@ import AppList from '@/components/Sidebar/AppList'
 import ChatWindow from '@/components/Chat/ChatWindow'
 import ApiList from '@/components/ApiCatalog/ApiList'
 import Toast from '@/components/Common/Toast'
+import { API_PREFIX } from '@/services/api'
 
 export default function Layout() {
-  const { setIsOnline, sidebarCollapsed } = useStore()
+  const { setIsOnline, sidebarCollapsed, setCurrentAccount } = useStore()
 
   useEffect(() => {
     const online = () => setIsOnline(true)
@@ -19,6 +20,21 @@ export default function Layout() {
       window.removeEventListener('offline', offline)
     }
   }, [setIsOnline])
+
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const res = await fetch(`${API_PREFIX}/api/data/getUserInfo`)
+        const data = await res.json()
+        if (data.name) {
+          setCurrentAccount(data.name)
+        }
+      } catch (e) {
+        console.error('获取用户信息失败:', e)
+      }
+    }
+    fetchUserInfo()
+  }, [setCurrentAccount])
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f5f6f7] text-[#1a1a1a]">

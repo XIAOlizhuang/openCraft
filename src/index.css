@@ -88,10 +88,39 @@
     border: 1px solid #e5e6eb;
     padding: 6px 10px;
     text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
   }
   .msg-content th {
     background: #f7f8fa;
     font-weight: 600;
+  }
+  .msg-content tbody tr:hover {
+    background: #f7f8fa;
+  }
+  .msg-content .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12px;
+    table-layout: fixed;
+  }
+  .msg-content .result-table th {
+    background: transparent;
+    color: #1a1a1a;
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: none;
+  }
+  .msg-content .result-table td {
+    padding: 8px 10px;
+    border-bottom: none;
+  }
+  .msg-content .result-table tbody tr:hover {
+    background: #f7fbff;
   }
   .msg-content hr {
     border: none;

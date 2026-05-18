@@ -185,7 +185,7 @@ export const useStore = create<AppState>((set) => ({
   showBrowserModal: false,
 
   // 当前账号
-  currentAccount: 'P00001100',
+  currentAccount: 'soaadmin',
 
   // 状态更新方法
   setMicroApps: (apps) => set({ microApps: apps }),
